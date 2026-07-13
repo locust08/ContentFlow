@@ -19,18 +19,23 @@ import { listRenders, renderClipperVideo, renderFinalVideo } from "./services/re
 import { generateElevenLabsVoiceover, listAudio } from "./services/elevenLabsClient.js";
 import { transcribeGeneratedVideo } from "./services/subtitlePlanner.js";
 import { analyzeClipperSource, downloadClipperSource, selectClipperHighlight } from "./services/clipperService.js";
-import { buildProductionJob } from "./services/productionJobs.js";
+import { buildProductionJob, canCancelProductionJob, canRetryProductionJob, productionJobSummary, workerHealth } from "./services/productionJobs.js";
 import {
+  cancelSupabaseProductionJob,
   createSupabaseProductionJob,
   deleteSupabaseProject,
+  getSupabaseProductionJob,
   initializeSupabaseSchema,
   listSupabaseMediaItems,
   listSupabaseActivity,
   listSupabaseOrganization,
   listSupabaseProjectSummaries,
   listSupabaseProductionJobs,
+  listSupabaseWorkerHeartbeats,
   recordSupabaseApprovalEvent,
   recordSupabaseActivityEvent,
+  retrySupabaseProductionJob,
+  setSupabaseWorkerHeartbeatStatus,
   supabaseAnalytics,
   supabaseProjectData,
   supabaseStatus,
@@ -572,17 +577,23 @@ async function handleApi(req, res, url) {
   const visibleProjects = () => filterProjectsForUser(allProjects(), requestUser);
   const visibleMedia = () => filterMediaForUser(mediaLibrary(), requestUser);
   const isAdmin = !requestUser || requestUser.role === "admin";
+  const forbidden = (message) => Object.assign(new Error(message), { status: 403 });
   const requireAdmin = () => {
-    if (!isAdmin) throw new Error("Admin access required.");
+    if (!isAdmin) throw forbidden("Admin access required.");
   };
   const requireProjectAccess = (projectName) => {
     const summary = getProjectSummary(projectName);
-    if (!canAccessProject(summary, requestUser)) throw new Error("Project access denied.");
+    if (!canAccessProject(summary, requestUser)) throw forbidden("Project access denied.");
     return summary;
   };
   const requireEditorAccess = (projectName) => {
     const summary = requireProjectAccess(projectName);
-    if (requestUser?.role === "manager-client") throw new Error("Editor access required.");
+    if (requestUser?.role === "manager-client") throw forbidden("Editor access required.");
+    return summary;
+  };
+  const requireProjectJobAccess = (projectName) => {
+    const summary = requireProjectAccess(projectName);
+    if (requestUser?.role === "manager-client") throw forbidden("Production job access requires an assigned staff role.");
     return summary;
   };
   const shouldQueueEngine = () => hostedDemoMode();
@@ -595,6 +606,21 @@ async function handleApi(req, res, url) {
       metadata
     });
   };
+  const operationalWorkers = async () => Promise.all((await listSupabaseWorkerHeartbeats()).map(async (worker) => {
+    const health = workerHealth(worker);
+    if (health.status === "offline" && worker.status !== "offline") {
+      const updated = await setSupabaseWorkerHeartbeatStatus(worker.workerId, "offline");
+      await recordSupabaseActivityEvent({
+        eventType: "production.worker.offline",
+        projectName: "",
+        actor: requestUser,
+        summary: `${worker.workerName || worker.workerId} is offline`,
+        metadata: { workerId: worker.workerId, workerName: worker.workerName || worker.workerId }
+      });
+      return { ...worker, ...updated, health };
+    }
+    return { ...worker, health };
+  }));
   const createQueuedJob = async (projectName, jobType, payload = {}) => {
     const summary = hostedDemoMode()
       ? filterProjectsForUser(await listSupabaseProjectSummaries(), requestUser).find((item) => item.name === projectName)
@@ -622,12 +648,17 @@ async function handleApi(req, res, url) {
     const hostedVisibleProjects = async () => filterProjectsForUser(await hostedProjects(), requestUser);
     const requireHostedProjectAccess = async (projectName) => {
       const summary = (await hostedVisibleProjects()).find((item) => item.name === projectName);
-      if (!summary) throw new Error("Project access denied.");
+      if (!summary) throw forbidden("Project access denied.");
       return summary;
     };
     const requireHostedEditorAccess = async (projectName) => {
       const summary = await requireHostedProjectAccess(projectName);
-      if (requestUser?.role === "manager-client") throw new Error("Editor access required.");
+      if (requestUser?.role === "manager-client") throw forbidden("Editor access required.");
+      return summary;
+    };
+    const requireHostedProjectJobAccess = async (projectName) => {
+      const summary = await requireHostedProjectAccess(projectName);
+      if (requestUser?.role === "manager-client") throw forbidden("Production job access requires an assigned staff role.");
       return summary;
     };
 
@@ -690,7 +721,7 @@ async function handleApi(req, res, url) {
       }
 
       if (req.method === "GET" && parts[3] === "jobs") {
-        await requireHostedProjectAccess(project);
+        await requireHostedProjectJobAccess(project);
         return sendJson(res, 200, { jobs: await listSupabaseProductionJobs({ projectName: project }) });
       }
 
@@ -834,8 +865,54 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "GET" && url.pathname === "/api/production-jobs") {
+    requireAdmin();
     const status = url.searchParams.get("status") || "";
-    return sendJson(res, 200, { jobs: await listSupabaseProductionJobs({ status }) });
+    const projectName = url.searchParams.get("project") || "";
+    const jobType = url.searchParams.get("jobType") || "";
+    const jobs = (await listSupabaseProductionJobs({ projectName, status })).filter((job) => !jobType || job.jobType === jobType);
+    const workers = await operationalWorkers();
+    return sendJson(res, 200, { jobs, summary: productionJobSummary(jobs), workers });
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/production-workers") {
+    requireAdmin();
+    return sendJson(res, 200, { workers: await operationalWorkers() });
+  }
+
+  if (req.method === "POST" && parts[0] === "api" && parts[1] === "production-jobs" && parts[2] && parts[3] === "retry") {
+    requireAdmin();
+    const id = decodeURIComponent(parts[2]);
+    const current = await getSupabaseProductionJob(id);
+    if (!current) return sendJson(res, 404, { error: "Production job was not found." });
+    if (!canRetryProductionJob(current)) return sendJson(res, 409, { error: `A ${current.status} production job cannot be retried.` });
+    const job = await retrySupabaseProductionJob(id);
+    if (!job) return sendJson(res, 409, { error: `A ${current.status} production job cannot be retried.` });
+    await recordSupabaseActivityEvent({
+      eventType: "production.job.retried",
+      projectName: job.projectName,
+      actor: requestUser,
+      summary: `${job.jobType} queued for retry`,
+      metadata: { jobId: job.id, jobType: job.jobType, attemptCount: job.attemptCount }
+    });
+    return sendJson(res, 200, { job });
+  }
+
+  if (req.method === "POST" && parts[0] === "api" && parts[1] === "production-jobs" && parts[2] && parts[3] === "cancel") {
+    requireAdmin();
+    const id = decodeURIComponent(parts[2]);
+    const current = await getSupabaseProductionJob(id);
+    if (!current) return sendJson(res, 404, { error: "Production job was not found." });
+    if (!canCancelProductionJob(current)) return sendJson(res, 409, { error: `A ${current.status} production job cannot be cancelled.` });
+    const job = await cancelSupabaseProductionJob(id);
+    if (!job) return sendJson(res, 409, { error: `A ${current.status} production job cannot be cancelled.` });
+    await recordSupabaseActivityEvent({
+      eventType: "production.job.cancelled",
+      projectName: job.projectName,
+      actor: requestUser,
+      summary: `${job.jobType} cancelled`,
+      metadata: { jobId: job.id, jobType: job.jobType, attemptCount: job.attemptCount }
+    });
+    return sendJson(res, 200, { job });
   }
 
   if (req.method === "POST" && url.pathname === "/api/clients") {
@@ -905,7 +982,7 @@ async function handleApi(req, res, url) {
     }
 
     if (req.method === "GET" && parts[3] === "jobs") {
-      requireProjectAccess(project);
+      requireProjectJobAccess(project);
       return sendJson(res, 200, { jobs: await listSupabaseProductionJobs({ projectName: project }) });
     }
 
@@ -1330,7 +1407,7 @@ export async function handleRequest(req, res) {
     if (url.pathname.startsWith("/media/")) return serveMedia(req, res, url);
     return serveStatic(req, res, url);
   } catch (error) {
-    return sendJson(res, 500, { error: error.message });
+    return sendJson(res, error.status || 500, { error: error.message });
   }
 }
 
