@@ -1134,7 +1134,63 @@ function analyticsWhere(user) {
   return { projectWhere: "where (client_id = $1 or reviewer_id = $2)", params: [user.clientId || "__none__", user.id] };
 }
 
+function analyticsProjectVisible(project, user) {
+  if (!user || user.role === "admin") return true;
+  if (user.role === "staff-editor") return project.assigned_staff_id === user.id;
+  return project.client_id === (user.clientId || "__none__") || project.reviewer_id === user.id;
+}
+
+function groupedRows(items, keyFor) {
+  const counts = new Map();
+  for (const item of items) {
+    const name = keyFor(item);
+    counts.set(name, (counts.get(name) || 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+}
+
+async function hostedSupabaseAnalytics(user) {
+  const [projects, renders, users, campaigns, assets, clipCandidates] = await Promise.all([
+    restTable("cf_projects", "select=*"),
+    restTable("cf_render_jobs", "select=project_name,created_at"),
+    restTable("cf_users", "select=id,name"),
+    restTable("cf_campaigns", "select=id,name"),
+    restTable("cf_assets", "select=project_name,kind"),
+    restTable("cf_clip_candidates", "select=project_name")
+  ]);
+
+  const visibleProjects = projects.filter((project) => analyticsProjectVisible(project, user));
+  const visibleNames = new Set(visibleProjects.map((project) => project.name));
+  const visibleRenders = renders.filter((render) => visibleNames.has(render.project_name));
+  const userNames = new Map(users.map((person) => [person.id, person.name]));
+  const campaignNames = new Map(campaigns.map((campaign) => [campaign.id, campaign.name]));
+  const approvalBreakdown = {};
+
+  for (const project of visibleProjects) {
+    const status = project.approval_status || "draft";
+    approvalBreakdown[status] = (approvalBreakdown[status] || 0) + 1;
+  }
+
+  return {
+    projects: visibleProjects.length,
+    renders: visibleRenders.length,
+    ai_projects: visibleProjects.filter((project) => project.type === "ai-generator").length,
+    clipper_projects: visibleProjects.filter((project) => project.type === "auto-clipper").length,
+    approval_breakdown: approvalBreakdown,
+    staff_workload: groupedRows(visibleProjects, (project) => userNames.get(project.assigned_staff_id) || project.assigned_staff_id || "Unassigned"),
+    campaign_projects: groupedRows(visibleProjects, (project) => campaignNames.get(project.campaign_id) || "No campaign"),
+    asset_breakdown: groupedRows(assets.filter((asset) => visibleNames.has(asset.project_name)), (asset) => asset.kind || "unknown"),
+    clip_candidates: clipCandidates.filter((candidate) => visibleNames.has(candidate.project_name)).length,
+    monthly_renders: groupedRows(visibleRenders.filter((render) => render.created_at), (render) => String(render.created_at).slice(0, 7))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(({ name: month, count }) => ({ month, count }))
+  };
+}
+
 export async function supabaseAnalytics(user = null) {
+  if (hostedRestMode()) return hostedSupabaseAnalytics(user);
   const { projectWhere, params } = analyticsWhere(user);
   const result = await getPool().query(`
     select
