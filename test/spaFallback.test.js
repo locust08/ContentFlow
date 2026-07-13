@@ -25,7 +25,7 @@ test("serves the React entry point for extensionless nested frontend routes", as
   const indexHtml = fs.readFileSync(path.join(rootDir, "public", "index.html"), "utf8");
 
   await withServer(async (baseUrl) => {
-    for (const route of ["/dashboard", "/projects/demo/ai-generator", "/manage/clients"]) {
+    for (const route of ["/dashboard", "/projects/demo/ai-generator", "/manage/clients", "/media"]) {
       const response = await fetch(`${baseUrl}${route}`);
       assert.equal(response.status, 200, route);
       assert.match(response.headers.get("content-type"), /^text\/html/);
@@ -72,7 +72,10 @@ test("Vercel routing preserves backend and static paths before the SPA fallback"
   assert.notEqual(filesystemIndex, -1, "filesystem handler is missing");
   assert.ok(filesystemIndex < fallbackIndex, "real files must be checked before SPA fallback");
 
-  for (const prefix of ["/api", "/media", "/mobile", "/assets"]) {
+  const exactMediaApiRoute = routes.find((route) => route.src === "/media" && route.dest === "/api/index.js");
+  assert.equal(exactMediaApiRoute, undefined, "the exact /media page must reach the React SPA");
+
+  for (const prefix of ["/api", "/media/", "/mobile", "/assets"]) {
     const routeIndex = routes.findIndex((route) => typeof route.src === "string" && route.src.startsWith(prefix));
     assert.notEqual(routeIndex, -1, `${prefix} preservation route is missing`);
     assert.ok(routeIndex < fallbackIndex, `${prefix} must be handled before SPA fallback`);

@@ -1246,7 +1246,7 @@ function serveMedia(req, res, url) {
   fs.createReadStream(filePath).pipe(res);
 }
 
-const spaReservedPaths = ["/api", "/media", "/assets", "/mobile"];
+const spaReservedPaths = ["/api", "/assets", "/mobile"];
 
 function shouldServeSpaFallback(req, pathname) {
   if (req.method !== "GET" && req.method !== "HEAD") return false;
