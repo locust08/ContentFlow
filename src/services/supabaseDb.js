@@ -723,6 +723,27 @@ export function mapWorkerHeartbeatRecord(row) {
   } : null;
 }
 
+const WORKER_UPDATE_STATUSES = new Set(["processing", "completed", "failed"]);
+const PRODUCTION_PROGRESS_MILESTONES = Object.freeze([0, 10, 25, 75, 90, 100]);
+
+export function normalizeProductionJobProgress(progress) {
+  const numeric = Number(progress);
+  if (!Number.isFinite(numeric)) return 0;
+  const bounded = Math.max(0, Math.min(100, numeric));
+  return [...PRODUCTION_PROGRESS_MILESTONES].reverse().find((milestone) => bounded >= milestone) || 0;
+}
+
+export function normalizeProductionJobUpdate(patch = {}) {
+  const status = patch.status || "processing";
+  if (!WORKER_UPDATE_STATUSES.has(status)) {
+    throw new Error("Production job updates require processing, completed, or failed status.");
+  }
+  const normalized = { ...patch, status };
+  if (status === "completed") normalized.progress = 100;
+  else if (Object.hasOwn(patch, "progress")) normalized.progress = normalizeProductionJobProgress(patch.progress);
+  return normalized;
+}
+
 export function activityLimit(limit) {
   const parsed = Number(limit);
   return Number.isFinite(parsed) && parsed > 0 ? Math.min(Math.floor(parsed), 100) : 20;
@@ -938,19 +959,19 @@ export async function claimNextSupabaseProductionJob() {
 
 export async function updateSupabaseProductionJob(id, patch = {}) {
   if (!id) throw new Error("Supabase job id is required.");
-  const status = patch.status || "processing";
+  const normalizedPatch = normalizeProductionJobUpdate(patch);
+  const status = normalizedPatch.status;
   const now = new Date().toISOString();
   const fields = { status, updated_at: now };
-  if (Object.hasOwn(patch, "outputUrl")) fields.output_url = patch.outputUrl || null;
-  if (Object.hasOwn(patch, "error")) fields.error = patch.error || null;
-  if (Object.hasOwn(patch, "progress")) fields.progress = Number(patch.progress || 0);
-  if (Object.hasOwn(patch, "progressMessage")) fields.progress_message = patch.progressMessage || null;
-  if (Object.hasOwn(patch, "result")) fields.result = patch.result || {};
+  if (Object.hasOwn(normalizedPatch, "outputUrl")) fields.output_url = normalizedPatch.outputUrl || null;
+  if (Object.hasOwn(normalizedPatch, "error")) fields.error = normalizedPatch.error || null;
+  if (Object.hasOwn(normalizedPatch, "progress")) fields.progress = normalizedPatch.progress;
+  if (Object.hasOwn(normalizedPatch, "progressMessage")) fields.progress_message = normalizedPatch.progressMessage || null;
+  if (Object.hasOwn(normalizedPatch, "result")) fields.result = normalizedPatch.result || {};
   if (["completed", "failed"].includes(status)) fields.completed_at = now;
-  if (status === "cancelled") fields.cancelled_at = now;
   let job = null;
   if (hostedRestMode()) {
-    const [row] = await restRequest(`cf_production_jobs?id=eq.${eq(id)}`, {
+    const [row] = await restRequest(`cf_production_jobs?id=eq.${eq(id)}&status=eq.processing`, {
       method: "PATCH",
       headers: { Prefer: "return=representation" },
       body: fields
@@ -967,7 +988,7 @@ export async function updateSupabaseProductionJob(id, patch = {}) {
     const result = await getPool().query(`
       update cf_production_jobs
       set ${assignments.join(", ")}
-      where id = $1
+      where id = $1 and status = 'processing'
       returning *
     `, values);
     job = mapProductionJobRecord(result.rows[0]);
@@ -1071,7 +1092,6 @@ export async function upsertSupabaseWorkerHeartbeat(worker) {
     last_seen_at: worker.lastSeenAt || now,
     updated_at: now
   };
-  if (worker.startedAt) heartbeat.started_at = worker.startedAt;
   if (hostedRestMode()) {
     const [row] = await restRequest("cf_worker_heartbeats?on_conflict=worker_id", {
       method: "POST",
@@ -1084,7 +1104,7 @@ export async function upsertSupabaseWorkerHeartbeat(worker) {
   const result = await getPool().query(`
     insert into cf_worker_heartbeats (
       worker_id, worker_name, status, current_job_id, hostname, capabilities, last_seen_at, started_at, updated_at
-    ) values ($1, $2, $3, $4, $5, $6::jsonb, $7::timestamptz, coalesce($8::timestamptz, now()), now())
+    ) values ($1, $2, $3, $4, $5, $6::jsonb, $7::timestamptz, now(), now())
     on conflict (worker_id) do update set
       worker_name = excluded.worker_name,
       status = excluded.status,
@@ -1101,8 +1121,7 @@ export async function upsertSupabaseWorkerHeartbeat(worker) {
     heartbeat.current_job_id,
     heartbeat.hostname,
     JSON.stringify(heartbeat.capabilities),
-    heartbeat.last_seen_at,
-    heartbeat.started_at || null
+    heartbeat.last_seen_at
   ]);
   return mapWorkerHeartbeatRecord(result.rows[0]);
 }
