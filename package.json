@@ -15,7 +15,8 @@
     "worker:once": "node src/worker/productionWorker.js --once",
     "build": "npm run build:frontend",
     "dev:frontend": "vite --config src/frontend/vite.config.js",
-    "build:frontend": "vite build --config src/frontend/vite.config.js"
+    "build:frontend": "vite build --config src/frontend/vite.config.js",
+    "test:frontend": "vitest run --config src/frontend/vite.config.js"
   },
   "engines": {
     "node": ">=20"
@@ -23,13 +24,19 @@
   "dependencies": {
     "@remotion/cli": "^4.0.462",
     "@remotion/media": "^4.0.462",
+    "lucide-react": "^1.24.0",
     "pg": "^8.22.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
+    "react-router-dom": "^7.18.1",
     "remotion": "^4.0.462"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@vitejs/plugin-react": "^6.0.3",
-    "vite": "^8.1.4"
+    "jsdom": "^29.1.1",
+    "vite": "^8.1.4",
+    "vitest": "^4.1.10"
   }
 }

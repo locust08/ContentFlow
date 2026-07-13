@@ -128,6 +128,7 @@ export function useContentFlow() {
     });
     await loadCore();
     await selectProject(result.project.name);
+    return result.project;
   }, [loadCore, selectProject, setStatus]);
 
   const createClient = useCallback(async (payload) => {
@@ -142,6 +143,49 @@ export function useContentFlow() {
     await api("/api/campaigns", { method: "POST", body: JSON.stringify(payload) });
     await loadCore();
     setStatus("Campaign created");
+  }, [loadCore, setStatus]);
+
+  const createFolder = useCallback(async (name) => {
+    setStatus("Creating folder");
+    await api("/api/folders", { method: "POST", body: JSON.stringify({ name }) });
+    await loadCore();
+    setStatus("Folder created");
+  }, [loadCore, setStatus]);
+
+  const renameFolder = useCallback(async (folderId, name) => {
+    setStatus("Renaming folder");
+    await api(`/api/folders/${encodeURIComponent(folderId)}`, { method: "PUT", body: JSON.stringify({ name }) });
+    await loadCore();
+    setStatus("Folder renamed");
+  }, [loadCore, setStatus]);
+
+  const deleteFolder = useCallback(async (folderId) => {
+    setStatus("Deleting folder");
+    await api(`/api/folders/${encodeURIComponent(folderId)}`, { method: "DELETE" });
+    await loadCore();
+    setStatus("Folder deleted");
+  }, [loadCore, setStatus]);
+
+  const deleteProject = useCallback(async (project) => {
+    setStatus("Deleting project");
+    await api(`/api/projects/${encodeURIComponent(project)}`, { method: "DELETE" });
+    setState((current) => ({ ...current, activeProject: current.activeProject === project ? "" : current.activeProject, activeProjectData: current.activeProject === project ? null : current.activeProjectData }));
+    await loadCore();
+    setStatus("Project deleted");
+  }, [loadCore, setStatus]);
+
+  const initializeSupabase = useCallback(async () => {
+    setStatus("Initializing Supabase");
+    await api("/api/supabase/init", { method: "POST" });
+    await loadCore();
+    setStatus("Supabase initialized");
+  }, [loadCore, setStatus]);
+
+  const syncSupabase = useCallback(async () => {
+    setStatus("Synchronizing local records");
+    await api("/api/supabase/sync-local", { method: "POST" });
+    await loadCore();
+    setStatus("Supabase synchronized");
   }, [loadCore, setStatus]);
 
   const updateProjectMeta = useCallback(async (project, payload) => {
@@ -208,6 +252,12 @@ export function useContentFlow() {
     createProject,
     createClient,
     createCampaign,
+    createFolder,
+    renameFolder,
+    deleteFolder,
+    deleteProject,
+    initializeSupabase,
+    syncSupabase,
     updateProjectMeta,
     runProjectAction,
     uploadProjectFile,

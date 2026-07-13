@@ -26,5 +26,9 @@ export default defineConfig({
       "/api": "http://localhost:4173",
       "/media": "http://localhost:4173"
     }
+  },
+  test: {
+    environment: "jsdom",
+    setupFiles: [path.join(rootDir, "src", "frontend", "test", "setup.js")]
   }
 });

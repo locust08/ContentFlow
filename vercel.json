@@ -2,11 +2,16 @@
   "version": 2,
   "outputDirectory": "public",
   "routes": [
-    { "src": "/", "dest": "/index.html" },
+    { "src": "/api", "dest": "/api/index.js" },
     { "src": "/api/(.*)", "dest": "/api/index.js" },
+    { "src": "/media", "dest": "/api/index.js" },
     { "src": "/media/(.*)", "dest": "/api/index.js" },
     { "src": "/mobile", "dest": "/mobile.html" },
-    { "src": "/(.*)", "dest": "/$1" }
+    { "src": "/assets", "dest": "/assets" },
+    { "src": "/assets/(.*)", "dest": "/assets/$1" },
+    { "handle": "filesystem" },
+    { "src": "/(.*\\.[^/]*)", "dest": "/$1" },
+    { "src": "/(.*)", "dest": "/index.html" }
   ],
   "functions": {
     "api/index.js": {

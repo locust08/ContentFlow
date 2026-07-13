@@ -1246,10 +1246,24 @@ function serveMedia(req, res, url) {
   fs.createReadStream(filePath).pipe(res);
 }
 
+const spaReservedPaths = ["/api", "/media", "/assets", "/mobile"];
+
+function shouldServeSpaFallback(req, pathname) {
+  if (req.method !== "GET" && req.method !== "HEAD") return false;
+  if (path.extname(pathname)) return false;
+  return !spaReservedPaths.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
+
 function serveStatic(req, res, url) {
   const requested = url.pathname === "/" ? "index.html" : url.pathname === "/mobile" ? "mobile.html" : url.pathname.slice(1);
-  const filePath = path.resolve(publicDir, requested);
-  if (!filePath.startsWith(path.resolve(publicDir)) || !fileExists(filePath)) {
+  const publicRoot = path.resolve(publicDir);
+  let filePath = path.resolve(publicDir, requested);
+  const relativePath = path.relative(publicRoot, filePath);
+  const isInsidePublic = relativePath === "" || (!relativePath.startsWith("..") && !path.isAbsolute(relativePath));
+
+  if ((!isInsidePublic || !fileExists(filePath)) && shouldServeSpaFallback(req, url.pathname)) {
+    filePath = path.join(publicDir, "index.html");
+  } else if (!isInsidePublic || !fileExists(filePath)) {
     return sendJson(res, 404, { error: "Not found" });
   }
 
@@ -1262,6 +1276,7 @@ function serveStatic(req, res, url) {
     ".svg": "image/svg+xml; charset=utf-8"
   }[ext] || "application/octet-stream";
   res.writeHead(200, { "Content-Type": type, "Cache-Control": "no-store" });
+  if (req.method === "HEAD") return res.end();
   fs.createReadStream(filePath).pipe(res);
 }
 
