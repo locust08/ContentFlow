@@ -197,11 +197,20 @@ function setCreateType(type) {
   }
 }
 
+function renderNavState() {
+  for (const item of $$(".sidebar-menu a")) {
+    const isView = item.dataset.navView && item.dataset.navView === state.activeView;
+    const isProject = item.dataset.projectShortcut && projectViewForType(item.dataset.projectShortcut) === state.activeView;
+    item.classList.toggle("active", Boolean(isView || isProject));
+  }
+}
+
 function showView(viewName = "dashboard") {
   if (isClientUser() && ["ai-generator-project", "auto-clipper-project"].includes(viewName)) {
     viewName = "media-library";
   }
   state.activeView = viewName;
+  renderNavState();
   const isProjectView = ["ai-generator-project", "auto-clipper-project"].includes(viewName);
   const isOverviewView = ["dashboard", "media-library", "analytics"].includes(viewName);
 
