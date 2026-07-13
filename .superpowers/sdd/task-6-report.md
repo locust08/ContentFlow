@@ -29,3 +29,7 @@ The build retained two pre-existing runtime asset-resolution notices for `/asset
 - Added dialog focus management: focus moves into job details, Escape closes it, focus returns to the triggering control, and Tab is contained within the drawer.
 
 Regression coverage now includes payload value redaction, concurrent mutation state, stale plus healthy workers, out-of-order refreshes with polling cleanup, and drawer Escape/focus restoration.
+
+## Final Security Follow-up
+
+Generic sensitive labels in string values are also redacted recursively when followed by `:`, `=`, hyphen, or underscore delimiters. Regression cases cover `secret-token`, `apiKey=abc`, `authorization: xyz`, and `password=...` under benign payload keys while preserving ordinary campaign guidance.

@@ -26,7 +26,12 @@ const commandCenter = {
         authorization: "secret-header",
         notes: "Bearer private-credential-value",
         sessionReference: "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhZG1pbiJ9.signature-value",
-        requestReference: "sk-abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJK"
+        requestReference: "sk-abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJK",
+        integrationNote: "secret-token",
+        configurationNote: "apiKey=abc",
+        connectionDetail: "authorization: xyz",
+        auditDetail: "password=not-for-display",
+        safeNote: "Approved campaign guidance"
       },
       requestedBy: "Admin",
       createdAt: "2026-07-14T08:00:00.000Z",
@@ -115,6 +120,7 @@ describe("ProductionCommandCenter", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open failed job details" }));
     expect(screen.getByRole("heading", { name: "Job details" })).toBeInTheDocument();
     expect(screen.getByText(/Campaign note/)).toBeInTheDocument();
+    expect(screen.getByText(/Approved campaign guidance/)).toBeInTheDocument();
     expect(screen.getByText("Started")).toBeInTheDocument();
     expect(screen.queryByText("secret-key")).not.toBeInTheDocument();
     expect(screen.queryByText("secret-token")).not.toBeInTheDocument();
@@ -124,6 +130,10 @@ describe("ProductionCommandCenter", () => {
     expect(screen.queryByText(/Bearer private-credential-value/)).not.toBeInTheDocument();
     expect(screen.queryByText(/eyJhbGciOiJIUzI1NiJ9/)).not.toBeInTheDocument();
     expect(screen.queryByText(/sk-abcdefghijklmnopqrstuvwxyz/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/secret-token/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/apiKey=abc/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/authorization: xyz/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/password=not-for-display/)).not.toBeInTheDocument();
   });
 
   it("uses all worker heartbeats to report a healthy command center", () => {

@@ -21,7 +21,7 @@ const metrics = [
 
 const statusOptions = ["", "queued", "processing", "completed", "failed", "cancelled"];
 const sensitiveKey = /api[_-]?key|token|authorization|password|secret|credential|bearer/i;
-const sensitiveValue = /\bbearer\s+[a-z0-9._~+/=-]{8,}\b|\beyJ[a-z0-9_-]{5,}\.[a-z0-9_-]+\.[a-z0-9_-]+\b|\b(?:sk|pk|rk|api|token|ghp)[_-][a-z0-9_-]{16,}\b/i;
+const sensitiveValue = /\bbearer\s+[a-z0-9._~+/=-]{8,}\b|\beyJ[a-z0-9_-]{5,}\.[a-z0-9_-]+\.[a-z0-9_-]+\b|\b(?:sk|pk|rk|api|token|ghp)[_-][a-z0-9_-]{16,}\b|\b(?:api[_-]?key|authorization|password|secret|token)\b\s*(?:[:=]\s*|[-_]\s*)\S+/i;
 const focusableSelector = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 function labelFor(value) {
