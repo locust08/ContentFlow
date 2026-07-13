@@ -19,3 +19,13 @@
 - `npm.cmd run build`: Vite production build completed successfully.
 
 The build retained two pre-existing runtime asset-resolution notices for `/assets/brand/contentflow-holographic.webp` and `/assets/brand/contentflow-studio.webp`; neither blocks output generation.
+
+## Review Remediation
+
+- Redacted secret-looking payload values in addition to sensitive key names, including Bearer credentials, JWT-shaped values, and recognized long API-token patterns.
+- Replaced the single active-job flag with action-keyed pending state so concurrent retry and cancel requests remain independently disabled and tracked.
+- Aggregated every worker heartbeat for the health indicator, including online, busy, and offline counts, so a stale worker cannot mask a healthy one.
+- Guarded refreshes with abort controllers and request sequencing; stale and unmounted responses cannot replace newer queue data, and polling stops on unmount.
+- Added dialog focus management: focus moves into job details, Escape closes it, focus returns to the triggering control, and Tab is contained within the drawer.
+
+Regression coverage now includes payload value redaction, concurrent mutation state, stale plus healthy workers, out-of-order refreshes with polling cleanup, and drawer Escape/focus restoration.

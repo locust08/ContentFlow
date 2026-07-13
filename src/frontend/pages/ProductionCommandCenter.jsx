@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   AlertTriangle, CheckCircle2, Clock3, ExternalLink, LoaderCircle,
@@ -21,6 +21,8 @@ const metrics = [
 
 const statusOptions = ["", "queued", "processing", "completed", "failed", "cancelled"];
 const sensitiveKey = /api[_-]?key|token|authorization|password|secret|credential|bearer/i;
+const sensitiveValue = /\bbearer\s+[a-z0-9._~+/=-]{8,}\b|\beyJ[a-z0-9_-]{5,}\.[a-z0-9_-]+\.[a-z0-9_-]+\b|\b(?:sk|pk|rk|api|token|ghp)[_-][a-z0-9_-]{16,}\b/i;
+const focusableSelector = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 function labelFor(value) {
   return value ? value.replaceAll("-", " ") : "All";
@@ -40,19 +42,38 @@ function formatDuration(job) {
 
 function sanitizePayload(value) {
   if (Array.isArray(value)) return value.map(sanitizePayload);
+  if (typeof value === "string" && sensitiveValue.test(value)) return "[redacted]";
   if (!value || typeof value !== "object") return value;
   return Object.fromEntries(Object.entries(value)
     .filter(([key]) => !sensitiveKey.test(key))
     .map(([key, item]) => [key, sanitizePayload(item)]));
 }
 
-function workerState(workers) {
-  const worker = workers[0];
-  const status = worker?.health?.status || (worker?.currentJobId ? "busy" : worker?.status || "offline");
-  return { worker, status };
+function workerState(workers = []) {
+  const counts = { online: 0, busy: 0, offline: 0 };
+  const activeWorkers = workers.map((worker) => ({
+    ...worker,
+    healthStatus: worker?.health?.status || (worker?.currentJobId ? "busy" : worker?.status || "offline")
+  }));
+  for (const worker of activeWorkers) counts[worker.healthStatus in counts ? worker.healthStatus : "offline"] += 1;
+  const lastSeenWorker = activeWorkers.reduce((latest, worker) => !latest || new Date(worker.lastSeenAt || 0) > new Date(latest.lastSeenAt || 0) ? worker : latest, null);
+  return {
+    counts,
+    lastSeenAt: lastSeenWorker?.lastSeenAt || "",
+    status: counts.busy ? "busy" : counts.online ? "online" : "offline"
+  };
 }
 
 function JobDetailsDrawer({ job, onClose }) {
+  const dialogRef = useRef(null);
+
+  useEffect(() => {
+    if (!job) return undefined;
+    const previousFocus = document.activeElement;
+    dialogRef.current?.focus();
+    return () => previousFocus?.focus?.();
+  }, [job]);
+
   if (!job) return null;
   const payload = sanitizePayload(job.payload || {});
   const timestamps = [
@@ -63,8 +84,32 @@ function JobDetailsDrawer({ job, onClose }) {
     ["Updated", job.updatedAt]
   ];
 
+  function handleKeyDown(event) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onClose();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const focusable = [...dialogRef.current.querySelectorAll(focusableSelector)];
+    if (!focusable.length) {
+      event.preventDefault();
+      dialogRef.current.focus();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable.at(-1);
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === dialogRef.current)) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
   return <div className="drawer-backdrop" onMouseDown={onClose}>
-    <aside className="side-drawer command-center-drawer" role="dialog" aria-modal="true" aria-labelledby="job-details-title" onMouseDown={(event) => event.stopPropagation()}>
+    <aside ref={dialogRef} className="side-drawer command-center-drawer" role="dialog" tabIndex="-1" aria-modal="true" aria-labelledby="job-details-title" onKeyDown={handleKeyDown} onMouseDown={(event) => event.stopPropagation()}>
       <header><div><p className="eyebrow">Production job</p><h2 id="job-details-title">Job details</h2></div><button className="icon-button" type="button" onClick={onClose} aria-label="Close job details" title="Close"><X size={18} /></button></header>
       <div className="command-center-drawer__summary"><Badge tone={job.status}>{job.status}</Badge><strong>{job.jobType || "production job"}</strong><span>{job.id}</span></div>
       <dl className="job-detail-list">
@@ -80,8 +125,9 @@ function JobDetailsDrawer({ job, onClose }) {
   </div>;
 }
 
-function JobRow({ job, activeActionJobId, onCancel, onDetails, onRetry }) {
-  const actionPending = activeActionJobId === job.id;
+function JobRow({ job, pendingActions = {}, onCancel, onDetails, onRetry }) {
+  const retryPending = Boolean(pendingActions[`${job.id}:retry`]);
+  const cancelPending = Boolean(pendingActions[`${job.id}:cancel`]);
   const canRetry = job.status === "failed" || job.status === "cancelled";
   const canCancel = job.status === "queued";
   const progress = Math.min(100, Math.max(0, Number(job.progress || 0)));
@@ -93,8 +139,8 @@ function JobRow({ job, activeActionJobId, onCancel, onDetails, onRetry }) {
     <div className="job-row__actions">
       {job.projectName && <Link className="text-button" to={`/projects?search=${encodeURIComponent(job.projectName)}`}>Open project</Link>}
       {job.outputUrl && <a className="text-button" href={job.outputUrl} target="_blank" rel="noreferrer" aria-label="Open output for completed job">Open output <ExternalLink size={14} /></a>}
-      {canRetry && <Button variant="secondary" disabled={actionPending} onClick={() => onRetry(job.id)} aria-label={`Retry ${job.status} job`}><RotateCcw size={15} /> {actionPending ? "Retrying" : "Retry"}</Button>}
-      {canCancel && <Button variant="danger" disabled={actionPending} onClick={() => onCancel(job.id)} aria-label="Cancel queued job"><XCircle size={15} /> {actionPending ? "Cancelling" : "Cancel"}</Button>}
+      {canRetry && <Button variant="secondary" disabled={retryPending} onClick={() => onRetry(job.id)} aria-label={`Retry ${job.status} job`}><RotateCcw size={15} /> {retryPending ? "Retrying" : "Retry"}</Button>}
+      {canCancel && <Button variant="danger" disabled={cancelPending} onClick={() => onCancel(job.id)} aria-label="Cancel queued job"><XCircle size={15} /> {cancelPending ? "Cancelling" : "Cancel"}</Button>}
     </div>
   </article>;
 }
@@ -102,7 +148,7 @@ function JobRow({ job, activeActionJobId, onCancel, onDetails, onRetry }) {
 export function ProductionCommandCenter({ app }) {
   const commandCenter = useProductionCommandCenter();
   const [selectedJob, setSelectedJob] = useState(null);
-  const { worker, status: workerStatus } = workerState(commandCenter.workers);
+  const { counts: workerCounts, lastSeenAt, status: workerStatus } = workerState(commandCenter.workers);
   const projects = useMemo(() => [...new Set([...(app.projects || []).map((project) => project.name), ...commandCenter.jobs.map((job) => job.projectName).filter(Boolean)])], [app.projects, commandCenter.jobs]);
   const jobTypes = useMemo(() => [...new Set(commandCenter.jobs.map((job) => job.jobType).filter(Boolean))], [commandCenter.jobs]);
   const visibleJobs = useMemo(() => {
@@ -114,7 +160,7 @@ export function ProductionCommandCenter({ app }) {
   const runAction = (method, jobId) => Promise.resolve(method(jobId)).catch(() => {});
 
   return <div className="page-stack command-center-page">
-    <header className="page-heading command-center-heading"><div><p className="eyebrow">Hybrid production engine</p><h1>Production Command Center</h1><p>Monitor hosted requests and the local Digital Bee production worker.</p></div><div className="command-center-heading__actions"><div className={`worker-health worker-health--${workerStatus}`}><span className="worker-health__dot" /><div><strong>Worker {workerStatus}</strong><small>{worker?.lastSeenAt ? `Last heartbeat ${formatTime(worker.lastSeenAt)}` : "No worker heartbeat recorded"}</small></div></div><Button variant="secondary" onClick={() => commandCenter.refresh().catch(() => {})} disabled={commandCenter.loading}><RefreshCw size={16} /> Refresh</Button></div></header>
+    <header className="page-heading command-center-heading"><div><p className="eyebrow">Hybrid production engine</p><h1>Production Command Center</h1><p>Monitor hosted requests and the local Digital Bee production worker.</p></div><div className="command-center-heading__actions"><div className={`worker-health worker-health--${workerStatus}`}><span className="worker-health__dot" /><div><strong>Worker {workerStatus}</strong><small>{workerCounts.online} online · {workerCounts.busy} busy · {workerCounts.offline} offline</small><small>{lastSeenAt ? `Last heartbeat ${formatTime(lastSeenAt)}` : "No worker heartbeat recorded"}</small></div></div><Button variant="secondary" onClick={() => commandCenter.refresh().catch(() => {})} disabled={commandCenter.loading}><RefreshCw size={16} /> Refresh</Button></div></header>
 
     {workerStatus === "offline" && commandCenter.summary.queued > 0 && <div className="command-center-warning"><ShieldAlert size={18} /><span><strong>Queued work is waiting safely</strong><small>Jobs will start when the local worker reconnects.</small></span></div>}
     {commandCenter.error && <div className="app-alert command-center-error"><span>{commandCenter.error}</span><Button variant="ghost" onClick={() => commandCenter.refresh().catch(() => {})}>Retry</Button></div>}
@@ -129,7 +175,7 @@ export function ProductionCommandCenter({ app }) {
         <label className="search-field"><span className="sr-only">Search jobs</span><input aria-label="Search jobs" value={commandCenter.filters.search} onChange={(event) => updateFilter("search", event.target.value)} placeholder="Search ID, project, or job type" /></label>
       </div>
       <div className="job-list">
-        {commandCenter.loading && !commandCenter.jobs.length ? <div className="queue-loading"><span className="spinner" /> Loading production jobs</div> : visibleJobs.map((job) => <JobRow key={job.id} job={job} activeActionJobId={commandCenter.activeActionJobId} onDetails={setSelectedJob} onRetry={(jobId) => runAction(commandCenter.retryJob, jobId)} onCancel={(jobId) => runAction(commandCenter.cancelJob, jobId)} />)}
+        {commandCenter.loading && !commandCenter.jobs.length ? <div className="queue-loading"><span className="spinner" /> Loading production jobs</div> : visibleJobs.map((job) => <JobRow key={job.id} job={job} pendingActions={commandCenter.pendingActions} onDetails={setSelectedJob} onRetry={(jobId) => runAction(commandCenter.retryJob, jobId)} onCancel={(jobId) => runAction(commandCenter.cancelJob, jobId)} />)}
         {!commandCenter.loading && !visibleJobs.length && <EmptyState title="No production jobs">Hosted production requests will appear here when a project queues work for the local worker.</EmptyState>}
       </div>
     </Card>

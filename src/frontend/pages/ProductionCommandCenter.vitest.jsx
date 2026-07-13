@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, renderHook, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import { ProductionCommandCenter } from "./ProductionCommandCenter.jsx";
@@ -19,7 +19,15 @@ const commandCenter = {
       progress: 75,
       progressMessage: "Render stopped",
       error: "The source video was unavailable.",
-      payload: { title: "Campaign note", apiKey: "secret-key", token: "secret-token", authorization: "secret-header" },
+      payload: {
+        title: "Campaign note",
+        apiKey: "secret-key",
+        token: "secret-token",
+        authorization: "secret-header",
+        notes: "Bearer private-credential-value",
+        sessionReference: "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhZG1pbiJ9.signature-value",
+        requestReference: "sk-abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJK"
+      },
       requestedBy: "Admin",
       createdAt: "2026-07-14T08:00:00.000Z",
       startedAt: "2026-07-14T08:01:00.000Z",
@@ -113,5 +121,98 @@ describe("ProductionCommandCenter", () => {
     expect(screen.queryByText("secret-header")).not.toBeInTheDocument();
     expect(screen.queryByText("apiKey")).not.toBeInTheDocument();
     expect(screen.queryByText("authorization")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Bearer private-credential-value/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/eyJhbGciOiJIUzI1NiJ9/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/sk-abcdefghijklmnopqrstuvwxyz/)).not.toBeInTheDocument();
+  });
+
+  it("uses all worker heartbeats to report a healthy command center", () => {
+    const originalWorkers = commandCenter.workers;
+    commandCenter.workers = [
+      { workerId: "worker-stale", workerName: "Old workstation", health: { status: "offline" }, lastSeenAt: "2026-07-14T08:00:00.000Z" },
+      { workerId: "worker-live", workerName: "Studio workstation", health: { status: "online" }, lastSeenAt: "2026-07-14T08:01:00.000Z" }
+    ];
+
+    render(<MemoryRouter><ProductionCommandCenter app={{ projects: [] }} /></MemoryRouter>);
+
+    expect(screen.getByText("Worker online")).toBeInTheDocument();
+    expect(screen.getByText("1 online · 0 busy · 1 offline")).toBeInTheDocument();
+    commandCenter.workers = originalWorkers;
+  });
+
+  it("focuses details, closes with Escape, and restores the opener focus", () => {
+    render(<MemoryRouter><ProductionCommandCenter app={{ projects: [] }} /></MemoryRouter>);
+    const opener = screen.getByRole("button", { name: "Open failed job details" });
+    opener.focus();
+    fireEvent.click(opener);
+
+    const dialog = screen.getByRole("dialog", { name: "Job details" });
+    expect(dialog).toHaveFocus();
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Job details" })).not.toBeInTheDocument();
+    expect(opener).toHaveFocus();
+  });
+});
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
+async function loadRealCommandCenterHook(apiMock) {
+  vi.resetModules();
+  vi.doUnmock("../state/useProductionCommandCenter.js");
+  vi.doMock("../api/client.js", () => ({ api: apiMock }));
+  return import("../state/useProductionCommandCenter.js");
+}
+
+describe("useProductionCommandCenter", () => {
+  it("keeps concurrent job actions pending independently", async () => {
+    const apiMock = vi.fn().mockResolvedValueOnce({ jobs: [], summary: {}, workers: [] });
+    const retry = deferred();
+    const cancel = deferred();
+    apiMock.mockImplementationOnce(() => retry.promise).mockImplementationOnce(() => cancel.promise).mockResolvedValue({ jobs: [], summary: {}, workers: [] });
+    const { useProductionCommandCenter } = await loadRealCommandCenterHook(apiMock);
+    const { result } = renderHook(() => useProductionCommandCenter());
+    await waitFor(() => expect(apiMock).toHaveBeenCalledTimes(1));
+
+    let retryPromise;
+    let cancelPromise;
+    act(() => {
+      retryPromise = result.current.retryJob("job-failed");
+      cancelPromise = result.current.cancelJob("job-queued");
+    });
+    expect(result.current.pendingActions).toEqual({ "job-failed:retry": true, "job-queued:cancel": true });
+
+    await act(async () => { retry.resolve({ job: {} }); await retryPromise; });
+    expect(result.current.pendingActions).toEqual({ "job-queued:cancel": true });
+    await act(async () => { cancel.resolve({ job: {} }); await cancelPromise; });
+    expect(result.current.pendingActions).toEqual({});
+  });
+
+  it("ignores stale refresh responses and stops polling after unmount", async () => {
+    vi.useFakeTimers();
+    const apiMock = vi.fn();
+    const first = deferred();
+    const latest = deferred();
+    apiMock.mockImplementationOnce(() => first.promise).mockImplementationOnce(() => latest.promise);
+    const { useProductionCommandCenter } = await loadRealCommandCenterHook(apiMock);
+    const { result, unmount } = renderHook(() => useProductionCommandCenter());
+    await act(async () => { await Promise.resolve(); });
+    expect(apiMock).toHaveBeenCalledTimes(1);
+
+    act(() => result.current.setFilters({ status: "", project: "", jobType: "", search: "latest" }));
+    await act(async () => { await Promise.resolve(); });
+    expect(apiMock).toHaveBeenCalledTimes(2);
+    await act(async () => { latest.resolve({ jobs: [{ id: "latest" }], summary: {}, workers: [] }); });
+    expect(result.current.jobs).toEqual([{ id: "latest" }]);
+    await act(async () => { first.resolve({ jobs: [{ id: "stale" }], summary: {}, workers: [] }); });
+    expect(result.current.jobs).toEqual([{ id: "latest" }]);
+
+    unmount();
+    act(() => vi.advanceTimersByTime(5000));
+    expect(apiMock).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
   });
 });
