@@ -12,7 +12,10 @@
     "pipeline": "node src/cli/runPipeline.js",
     "seed:demo": "node src/cli/seedDemoUsers.js",
     "worker": "node src/worker/productionWorker.js",
-    "worker:once": "node src/worker/productionWorker.js --once"
+    "worker:once": "node src/worker/productionWorker.js --once",
+    "build": "npm run build:frontend",
+    "dev:frontend": "vite --config src/frontend/vite.config.js",
+    "build:frontend": "vite build --config src/frontend/vite.config.js"
   },
   "engines": {
     "node": ">=20"
@@ -24,5 +27,9 @@
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "remotion": "^4.0.462"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.0.3",
+    "vite": "^8.1.4"
   }
 }

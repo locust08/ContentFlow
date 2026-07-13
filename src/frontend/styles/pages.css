@@ -1,0 +1,183 @@
+.metric-grid,
+.dashboard-grid,
+.workspace-grid,
+.readiness-grid,
+.media-grid,
+.analytics-layout,
+.settings-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.metric-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.dashboard-grid,
+.workspace-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.readiness-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.media-grid {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+.analytics-layout {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.analytics-layout .card {
+  grid-column: 1 / -1;
+}
+
+.settings-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.flow-steps,
+.role-cards,
+.data-list {
+  display: grid;
+  gap: 10px;
+}
+
+.flow-steps {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.flow-steps span,
+.role-cards article,
+.data-row,
+.readiness-card,
+.settings-grid article {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px;
+  background: rgba(255, 252, 242, 0.88);
+}
+
+.role-cards {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.role-cards article,
+.settings-grid article,
+.readiness-card {
+  display: grid;
+  gap: 5px;
+}
+
+.role-cards span,
+.settings-grid span,
+.readiness-card span,
+.data-row span,
+.video-card span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.data-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.data-row h3,
+.data-row p {
+  margin: 0;
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.readiness-card.ready {
+  border-color: rgba(22, 131, 74, 0.24);
+  background: rgba(22, 131, 74, 0.08);
+}
+
+.video-card {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(255, 252, 242, 0.88);
+}
+
+.video-card video,
+.video-card__placeholder {
+  width: 100%;
+  aspect-ratio: 9 / 14;
+  max-height: 380px;
+  border-radius: 10px;
+  background: #111;
+  color: #fff;
+  object-fit: cover;
+}
+
+.video-card__placeholder {
+  display: grid;
+  place-items: center;
+}
+
+.chart-bars {
+  height: 220px;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 10px;
+  align-items: end;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 252, 242, 0.88);
+}
+
+.chart-bars span {
+  border-radius: 999px 999px 6px 6px;
+  background: linear-gradient(180deg, var(--yellow), var(--amber));
+}
+
+.chart-bars span:nth-child(even) {
+  background: linear-gradient(180deg, #a991ff, var(--purple));
+}
+
+@media (max-width: 1180px) {
+  .metric-grid,
+  .dashboard-grid,
+  .workspace-grid,
+  .readiness-grid,
+  .analytics-layout,
+  .settings-grid,
+  .flow-steps,
+  .role-cards {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .metric-grid,
+  .dashboard-grid,
+  .workspace-grid,
+  .readiness-grid,
+  .analytics-layout,
+  .settings-grid,
+  .flow-steps,
+  .role-cards,
+  .data-row {
+    grid-template-columns: 1fr;
+  }
+
+  .row-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
