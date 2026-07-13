@@ -10,12 +10,12 @@ import {
   ApprovalsPage,
   CampaignsPage,
   ClientsPage,
-  JobsPage,
   MediaPage,
   ProjectsPage,
   SettingsPage,
   TeamPage
 } from "./pages/ManagementPages.jsx";
+import { ProductionCommandCenter } from "./pages/ProductionCommandCenter.jsx";
 import { AiGeneratorPage, AutoClipperPage } from "./pages/ProjectWorkspaces.jsx";
 import { CreateProjectModal } from "./components/CreateProjectModal.jsx";
 import { canAccessPath, getLandingPath, getProjectPath } from "./routing/routes.js";
@@ -70,7 +70,7 @@ function AppRoutes({ app }) {
       <Route path="/manage/clients" element={protectedPage(<ClientsPage app={app} />)} />
       <Route path="/manage/campaigns" element={protectedPage(<CampaignsPage app={app} />)} />
       <Route path="/manage/team" element={protectedPage(<TeamPage app={app} />)} />
-      <Route path="/manage/jobs" element={protectedPage(<JobsPage app={app} />)} />
+      <Route path="/manage/jobs" element={protectedPage(<ProductionCommandCenter app={app} />)} />
       <Route path="/manage/settings" element={protectedPage(<SettingsPage app={app} />)} />
       <Route path="*" element={<Navigate to={getLandingPath(app.role)} replace />} />
     </Routes>
