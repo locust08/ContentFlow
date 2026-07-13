@@ -131,15 +131,20 @@ flowchart LR
 
 | Test Case | Expected Result | Status |
 |---|---|---|
-| Admin login | Admin dashboard, project creation, Supabase sync visible | Ready for demo account testing |
-| Staff login | Only assigned projects visible | Ready for demo account testing |
-| Client login | Only client/reviewer media and analytics visible | Ready for demo account testing |
-| Project creation | Local project and Supabase `cf_projects` row created | Implemented |
-| Asset upload | Local file saved and Supabase `cf_assets` row created | Implemented |
-| Clip analysis | Highlight candidates saved and synced to Supabase | Implemented |
-| Render output | Render job saved to Supabase `cf_render_jobs` | Implemented |
-| Approval update | Project status and `cf_approval_events` updated | Implemented |
-| Mobile route | Mobile PWA loads and uses same auth/session | Implemented |
+| Admin login | Admin dashboard, project creation, Supabase sync, and Command Center visible | Passed 2026-07-14 |
+| Staff login | Only assigned projects and project-scoped production data visible | Passed 2026-07-14 |
+| Client login | Only client/reviewer media, approvals, and analytics visible | Passed 2026-07-14 |
+| Project creation | Local project and Supabase `cf_projects` row created | Passed 2026-07-14 |
+| Asset upload | Local file saved and Supabase `cf_assets` row created | Passed 2026-07-14 |
+| Clip analysis | Highlight candidates saved and synced to Supabase | Passed 2026-07-14 |
+| Character variations | Same highlight renders one MP4 per selected reaction character | Passed with 2 outputs on 2026-07-14 |
+| Render output | Render job, result, and hosted media URL persist in Supabase | Passed 2026-07-14 |
+| Approval update | Project status and `cf_approval_events` updated | Passed 2026-07-14 |
+| Analytics | Production, approval, staff, campaign, and asset metrics query Supabase | Passed 2026-07-14 |
+| Mobile route | Mobile PWA loads assigned work and role-appropriate controls | Passed 2026-07-14 |
+| Live LibTV generation | New UGC video generated through Kling O3 | Blocked by LibTV legacy Skill to CLI migration |
+
+The complete execution record, job IDs, hosted output links, and remediation steps are in [FYP_SYSTEM_TEST_RESULTS.md](./FYP_SYSTEM_TEST_RESULTS.md).
 
 ## Screenshot Checklist
 
@@ -158,3 +163,5 @@ flowchart LR
 ## Hosted Demo Notes
 
 The hosted demo should use Supabase Auth, Supabase PostgreSQL, and prepared media outputs. Heavy generation actions such as yt-dlp download, Remotion render, LibTV, and OpenAI generation may be kept local/admin-side or disabled in hosted mode to keep the lecturer demo reliable.
+
+The production worker and hosted dashboard bridge are now validated. Prepared outputs are recommended for the lecturer demonstration until the workstation is authenticated with the new LibTV CLI and the Kling O3 adapter is re-tested.
