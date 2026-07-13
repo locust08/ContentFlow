@@ -6,7 +6,7 @@
 |---|---|
 | Test date | 2026-07-14, Asia/Kuala_Lumpur |
 | Branch | `codex/production-command-center` |
-| Tested code commit | `7e6c02615e2ebe5c84c79e91bd69600e70d9a105` |
+| Tested code commit | `7f07e0c8e46cbb8839cad984729fdf854d978397` |
 | Web runtime | Node.js, React/Vite dashboard, local API server |
 | Production runtime | Local worker `MSI`, Remotion, ffmpeg, OpenAI, LibTV |
 | Shared backend | Supabase PostgreSQL, Auth, and Storage |
@@ -43,8 +43,8 @@ Live AI UGC generation is separately blocked by LibTV's migration from its legac
 
 | Test ID | Module | Input | Expected | Actual | Status | Evidence |
 |---|---|---|---|---|---|---|
-| AV-01 | React frontend | Full Vitest suite | All frontend tests pass | 10 files, 23 tests passed | PASS | `npm.cmd run test:frontend` |
-| AV-02 | Backend and services | Full Node test suite | All tests pass | 62 tests passed, 0 failed | PASS | `node --test` |
+| AV-01 | React frontend | Full Vitest suite | All frontend tests pass | 11 files, 26 tests passed | PASS | `npm.cmd run test:frontend` |
+| AV-02 | Backend and services | Full Node test suite | All tests pass | 67 tests passed, 0 failed | PASS | `node --test` |
 | AV-03 | Production build | Vite build | Build exits successfully | Production bundle generated successfully | PASS | `npm.cmd run build` |
 | AV-04 | Remotion | Composition discovery | Composition can be discovered | `ContentMachine` discovered, exit code 0 | PASS | `npx.cmd remotion compositions src/remotion/index.jsx --log=error` |
 | AV-05 | Dependency security | Production dependencies | No known production vulnerabilities | 0 vulnerabilities | PASS | `npm.cmd audit --omit=dev` |
@@ -54,7 +54,7 @@ Live AI UGC generation is separately blocked by LibTV's migration from its legac
 | Test ID | Module | Input | Expected | Actual | Status | Evidence |
 |---|---|---|---|---|---|---|
 | DB-01 | Supabase schema | Initialize current schema | Operational job fields and worker table exist | `attempt_count`, `cancelled_at`, `progress`, `progress_message`, `result`, and `cf_worker_heartbeats` confirmed | PASS | Supabase project `qyxmckrjdkrnkgsdteik` |
-| DB-02 | Supabase Storage | Create public media bucket | Worker can deliver hosted MP4 files | `contentflow-media` created with a 50 MB per-object limit | PASS | Public bucket HEAD checks returned HTTP 200 |
+| DB-02 | Supabase Storage | Create public media bucket and sync a reaction asset | Worker can download durable hosted media instead of a localhost URL | `contentflow-media` created with a 50 MB per-object limit; a 5 MB signed direct-upload probe returned HTTP 200 with exact size, `video/mp4`, and `ftyp` signature; synced reaction returned HTTP 206 | PASS | Asset `fyp-evidence-queue-20260714:reaction-character:char-1783966840385-man-reassuring-viewer-gently-202605201458` |
 | Q-01 | Offline queue | Create job while worker is stopped | Job remains queued and survives refresh | Job stayed queued; Command Center displayed the offline-safe warning | PASS | Project `fyp-evidence-queue-20260714` |
 | Q-02 | Cancellation | Cancel queued clip job | Job is never claimed | Job remained `cancelled`, attempt count remained 0 | PASS | Job `45f2fb50-99e2-43b7-af0c-0566ba20322d` |
 | Q-03 | Failure detail | Claim clip job with missing source | Failure is stored with a useful error | Job failed at progress 25 with the missing-input error | PASS | Job `06abd8c0-05f1-4aec-82c3-83bc67886898`, attempt 1 |
