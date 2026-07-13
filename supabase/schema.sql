@@ -106,6 +106,11 @@ create table if not exists cf_production_jobs (
   requested_by text,
   output_url text,
   error text,
+  attempt_count integer not null default 0,
+  cancelled_at timestamptz,
+  progress integer not null default 0,
+  progress_message text,
+  result jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   started_at timestamptz,
   completed_at timestamptz,
@@ -115,6 +120,25 @@ create table if not exists cf_production_jobs (
 alter table cf_users add column if not exists auth_user_id uuid;
 alter table cf_users add column if not exists client_id text;
 alter table cf_render_jobs add column if not exists output_url text;
+alter table cf_production_jobs add column if not exists attempt_count integer not null default 0;
+alter table cf_production_jobs add column if not exists cancelled_at timestamptz;
+alter table cf_production_jobs add column if not exists progress integer not null default 0;
+alter table cf_production_jobs add column if not exists progress_message text;
+alter table cf_production_jobs add column if not exists result jsonb not null default '{}'::jsonb;
+
+create table if not exists cf_worker_heartbeats (
+  worker_id text primary key,
+  worker_name text not null,
+  status text not null default 'online',
+  current_job_id uuid references cf_production_jobs(id) on delete set null,
+  hostname text,
+  capabilities jsonb not null default '[]'::jsonb,
+  last_seen_at timestamptz not null default now(),
+  started_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table cf_worker_heartbeats add column if not exists updated_at timestamptz not null default now();
 
 create index if not exists idx_cf_users_auth_user on cf_users(auth_user_id);
 create index if not exists idx_cf_users_email on cf_users(lower(email));
@@ -127,3 +151,4 @@ create index if not exists idx_cf_analytics_events_created_at on cf_analytics_ev
 create index if not exists idx_cf_analytics_events_project_name on cf_analytics_events(project_name);
 create index if not exists idx_cf_production_jobs_status on cf_production_jobs(status, created_at);
 create index if not exists idx_cf_production_jobs_project on cf_production_jobs(project_name);
+create index if not exists idx_cf_worker_heartbeats_last_seen on cf_worker_heartbeats(last_seen_at desc);

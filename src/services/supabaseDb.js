@@ -687,7 +687,7 @@ export async function findSupabaseUserProfile({ authUserId = "", email = "" } = 
   }
 }
 
-function mapProductionJob(row) {
+export function mapProductionJobRecord(row) {
   return row ? {
     id: row.id,
     projectName: row.project_name,
@@ -697,9 +697,28 @@ function mapProductionJob(row) {
     requestedBy: row.requested_by || "",
     outputUrl: row.output_url || "",
     error: row.error || "",
+    attemptCount: Number(row.attempt_count || 0),
+    progress: Number(row.progress || 0),
+    progressMessage: row.progress_message || "",
+    result: row.result || {},
     createdAt: row.created_at,
     startedAt: row.started_at,
     completedAt: row.completed_at,
+    cancelledAt: row.cancelled_at,
+    updatedAt: row.updated_at
+  } : null;
+}
+
+export function mapWorkerHeartbeatRecord(row) {
+  return row ? {
+    workerId: row.worker_id,
+    workerName: row.worker_name,
+    status: row.status,
+    currentJobId: row.current_job_id || "",
+    hostname: row.hostname || "",
+    capabilities: Array.isArray(row.capabilities) ? row.capabilities : [],
+    lastSeenAt: row.last_seen_at,
+    startedAt: row.started_at,
     updatedAt: row.updated_at
   } : null;
 }
@@ -826,7 +845,7 @@ export async function createSupabaseProductionJob(job) {
         updated_at: new Date().toISOString()
       }
     });
-    return mapProductionJob(row);
+    return mapProductionJobRecord(row);
   }
   if (!await ensureSupabaseReady()) throw new Error("Supabase is not configured.");
   const result = await getPool().query(`
@@ -834,7 +853,7 @@ export async function createSupabaseProductionJob(job) {
     values ($1, $2, $3, $4::jsonb, $5, now())
     returning *
   `, [job.projectName, job.jobType, job.status || "queued", JSON.stringify(job.payload || {}), job.requestedBy || null]);
-  return mapProductionJob(result.rows[0]);
+  return mapProductionJobRecord(result.rows[0]);
 }
 
 export async function listSupabaseProductionJobs({ projectName = "", status = "", limit = 50 } = {}) {
@@ -842,7 +861,7 @@ export async function listSupabaseProductionJobs({ projectName = "", status = ""
     const filters = ["select=*", "order=created_at.desc", `limit=${Math.max(1, Math.min(Number(limit) || 50, 200))}`];
     if (projectName) filters.push(`project_name=eq.${eq(projectName)}`);
     if (status) filters.push(`status=eq.${eq(status)}`);
-    return (await restTable("cf_production_jobs", filters.join("&"))).map(mapProductionJob);
+    return (await restTable("cf_production_jobs", filters.join("&"))).map(mapProductionJobRecord);
   }
   if (!await ensureSupabaseReady()) return [];
   const clauses = [];
@@ -864,15 +883,45 @@ export async function listSupabaseProductionJobs({ projectName = "", status = ""
     order by created_at desc
     limit $${params.length}
   `, params);
-  return result.rows.map(mapProductionJob);
+  return result.rows.map(mapProductionJobRecord);
 }
 
 export async function claimNextSupabaseProductionJob() {
+  if (hostedRestMode()) {
+    const [candidate] = await restTable("cf_production_jobs", "select=*&status=eq.queued&order=created_at.asc&limit=1");
+    if (!candidate) return null;
+    const [row] = await restRequest(`cf_production_jobs?id=eq.${eq(candidate.id)}&status=eq.queued`, {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: {
+        status: "processing",
+        attempt_count: Number(candidate.attempt_count || 0) + 1,
+        started_at: new Date().toISOString(),
+        completed_at: null,
+        cancelled_at: null,
+        output_url: null,
+        error: null,
+        progress: 10,
+        progress_message: null,
+        result: {},
+        updated_at: new Date().toISOString()
+      }
+    });
+    return mapProductionJobRecord(row);
+  }
   if (!await ensureSupabaseReady()) return null;
   const result = await getPool().query(`
     update cf_production_jobs
     set status = 'processing',
-      started_at = coalesce(started_at, now()),
+      attempt_count = attempt_count + 1,
+      started_at = now(),
+      completed_at = null,
+      cancelled_at = null,
+      output_url = null,
+      error = null,
+      progress = 10,
+      progress_message = null,
+      result = '{}'::jsonb,
       updated_at = now()
     where id = (
       select id
@@ -884,40 +933,44 @@ export async function claimNextSupabaseProductionJob() {
     )
     returning *
   `);
-  return mapProductionJob(result.rows[0]);
+  return mapProductionJobRecord(result.rows[0]);
 }
 
 export async function updateSupabaseProductionJob(id, patch = {}) {
   if (!id) throw new Error("Supabase job id is required.");
   const status = patch.status || "processing";
-  const completedAt = ["completed", "failed"].includes(status) ? new Date().toISOString() : null;
+  const now = new Date().toISOString();
+  const fields = { status, updated_at: now };
+  if (Object.hasOwn(patch, "outputUrl")) fields.output_url = patch.outputUrl || null;
+  if (Object.hasOwn(patch, "error")) fields.error = patch.error || null;
+  if (Object.hasOwn(patch, "progress")) fields.progress = Number(patch.progress || 0);
+  if (Object.hasOwn(patch, "progressMessage")) fields.progress_message = patch.progressMessage || null;
+  if (Object.hasOwn(patch, "result")) fields.result = patch.result || {};
+  if (["completed", "failed"].includes(status)) fields.completed_at = now;
+  if (status === "cancelled") fields.cancelled_at = now;
   let job = null;
   if (hostedRestMode()) {
     const [row] = await restRequest(`cf_production_jobs?id=eq.${eq(id)}`, {
       method: "PATCH",
       headers: { Prefer: "return=representation" },
-      body: {
-        status,
-        output_url: patch.outputUrl || null,
-        error: patch.error || null,
-        completed_at: completedAt,
-        updated_at: new Date().toISOString()
-      }
+      body: fields
     });
-    job = mapProductionJob(row);
+    job = mapProductionJobRecord(row);
   } else {
     if (!await ensureSupabaseReady()) throw new Error("Supabase is not configured.");
+    const values = [id];
+    const assignments = Object.entries(fields).map(([column, fieldValue]) => {
+      values.push(column === "result" ? JSON.stringify(fieldValue) : fieldValue);
+      const placeholder = `$${values.length}`;
+      return `${column} = ${column === "result" ? `${placeholder}::jsonb` : placeholder}`;
+    });
     const result = await getPool().query(`
       update cf_production_jobs
-      set status = $2,
-        output_url = $3,
-        error = $4,
-        completed_at = coalesce($5::timestamptz, completed_at),
-        updated_at = now()
+      set ${assignments.join(", ")}
       where id = $1
       returning *
-    `, [id, status, patch.outputUrl || null, patch.error || null, completedAt]);
-    job = mapProductionJob(result.rows[0]);
+    `, values);
+    job = mapProductionJobRecord(result.rows[0]);
   }
   if (job && (status === "completed" || status === "failed")) {
     void recordSupabaseActivityEvent({
@@ -929,6 +982,158 @@ export async function updateSupabaseProductionJob(id, patch = {}) {
     });
   }
   return job;
+}
+
+export async function getSupabaseProductionJob(id) {
+  if (!id) throw new Error("Supabase job id is required.");
+  if (hostedRestMode()) {
+    const [row] = await restTable("cf_production_jobs", `select=*&id=eq.${eq(id)}&limit=1`);
+    return mapProductionJobRecord(row);
+  }
+  if (!await ensureSupabaseReady()) return null;
+  const result = await getPool().query("select * from cf_production_jobs where id = $1 limit 1", [id]);
+  return mapProductionJobRecord(result.rows[0]);
+}
+
+export async function cancelSupabaseProductionJob(id) {
+  if (!id) throw new Error("Supabase job id is required.");
+  const now = new Date().toISOString();
+  if (hostedRestMode()) {
+    const [row] = await restRequest(`cf_production_jobs?id=eq.${eq(id)}&status=eq.queued`, {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: { status: "cancelled", cancelled_at: now, updated_at: now }
+    });
+    return mapProductionJobRecord(row);
+  }
+  if (!await ensureSupabaseReady()) return null;
+  const result = await getPool().query(`
+    update cf_production_jobs
+    set status = 'cancelled', cancelled_at = now(), updated_at = now()
+    where id = $1 and status = 'queued'
+    returning *
+  `, [id]);
+  return mapProductionJobRecord(result.rows[0]);
+}
+
+export async function retrySupabaseProductionJob(id) {
+  if (!id) throw new Error("Supabase job id is required.");
+  const now = new Date().toISOString();
+  const retryFields = {
+    status: "queued",
+    started_at: null,
+    completed_at: null,
+    cancelled_at: null,
+    output_url: null,
+    error: null,
+    progress: 0,
+    progress_message: null,
+    result: {},
+    updated_at: now
+  };
+  if (hostedRestMode()) {
+    const [row] = await restRequest(`cf_production_jobs?id=eq.${eq(id)}&status=in.(failed,cancelled)`, {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: retryFields
+    });
+    return mapProductionJobRecord(row);
+  }
+  if (!await ensureSupabaseReady()) return null;
+  const result = await getPool().query(`
+    update cf_production_jobs
+    set status = 'queued',
+      started_at = null,
+      completed_at = null,
+      cancelled_at = null,
+      output_url = null,
+      error = null,
+      progress = 0,
+      progress_message = null,
+      result = '{}'::jsonb,
+      updated_at = now()
+    where id = $1 and status in ('failed', 'cancelled')
+    returning *
+  `, [id]);
+  return mapProductionJobRecord(result.rows[0]);
+}
+
+export async function upsertSupabaseWorkerHeartbeat(worker) {
+  if (!worker?.workerId) throw new Error("Worker id is required.");
+  const now = new Date().toISOString();
+  const heartbeat = {
+    worker_id: worker.workerId,
+    worker_name: worker.workerName || worker.workerId,
+    status: worker.status || "online",
+    current_job_id: worker.currentJobId || null,
+    hostname: worker.hostname || null,
+    capabilities: Array.isArray(worker.capabilities) ? worker.capabilities : [],
+    last_seen_at: worker.lastSeenAt || now,
+    updated_at: now
+  };
+  if (worker.startedAt) heartbeat.started_at = worker.startedAt;
+  if (hostedRestMode()) {
+    const [row] = await restRequest("cf_worker_heartbeats?on_conflict=worker_id", {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates,return=representation" },
+      body: heartbeat
+    });
+    return mapWorkerHeartbeatRecord(row);
+  }
+  if (!await ensureSupabaseReady()) throw new Error("Supabase is not configured.");
+  const result = await getPool().query(`
+    insert into cf_worker_heartbeats (
+      worker_id, worker_name, status, current_job_id, hostname, capabilities, last_seen_at, started_at, updated_at
+    ) values ($1, $2, $3, $4, $5, $6::jsonb, $7::timestamptz, coalesce($8::timestamptz, now()), now())
+    on conflict (worker_id) do update set
+      worker_name = excluded.worker_name,
+      status = excluded.status,
+      current_job_id = excluded.current_job_id,
+      hostname = excluded.hostname,
+      capabilities = excluded.capabilities,
+      last_seen_at = excluded.last_seen_at,
+      updated_at = now()
+    returning *
+  `, [
+    heartbeat.worker_id,
+    heartbeat.worker_name,
+    heartbeat.status,
+    heartbeat.current_job_id,
+    heartbeat.hostname,
+    JSON.stringify(heartbeat.capabilities),
+    heartbeat.last_seen_at,
+    heartbeat.started_at || null
+  ]);
+  return mapWorkerHeartbeatRecord(result.rows[0]);
+}
+
+export async function listSupabaseWorkerHeartbeats() {
+  if (hostedRestMode()) {
+    return (await restTable("cf_worker_heartbeats", "select=*&order=last_seen_at.desc")).map(mapWorkerHeartbeatRecord);
+  }
+  if (!await ensureSupabaseReady()) return [];
+  const result = await getPool().query("select * from cf_worker_heartbeats order by last_seen_at desc");
+  return result.rows.map(mapWorkerHeartbeatRecord);
+}
+
+export async function setSupabaseWorkerHeartbeatStatus(workerId, status) {
+  if (!workerId) throw new Error("Worker id is required.");
+  if (hostedRestMode()) {
+    const [row] = await restRequest(`cf_worker_heartbeats?worker_id=eq.${eq(workerId)}`, {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: { status, updated_at: new Date().toISOString() }
+    });
+    return mapWorkerHeartbeatRecord(row);
+  }
+  if (!await ensureSupabaseReady()) return null;
+  const result = await getPool().query(`
+    update cf_worker_heartbeats
+    set status = $2, updated_at = now()
+    where worker_id = $1
+    returning *
+  `, [workerId, status]);
+  return mapWorkerHeartbeatRecord(result.rows[0]);
 }
 
 function contentTypeForPath(filePath) {
