@@ -22,20 +22,21 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@remotion/cli": "^4.0.462",
-    "@remotion/media": "^4.0.462",
+    "@remotion/cli": "4.0.489",
+    "@remotion/media": "4.0.489",
     "lucide-react": "^1.24.0",
     "pg": "^8.22.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-router-dom": "^7.18.1",
-    "remotion": "^4.0.462"
+    "remotion": "4.0.489"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@vitejs/plugin-react": "^6.0.3",
     "jsdom": "^29.1.1",
+    "playwright": "^1.61.1",
     "vite": "^8.1.4",
     "vitest": "^4.1.10"
   }
