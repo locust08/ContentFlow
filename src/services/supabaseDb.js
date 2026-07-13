@@ -32,6 +32,47 @@ function supabasePublicUrl() {
   return ref ? `https://${ref}.supabase.co` : "";
 }
 
+function hostedRestMode() {
+  return value("HOSTED_DEMO") === "true";
+}
+
+async function restRequest(resource, {
+  method = "GET",
+  body = null,
+  headers = {}
+} = {}) {
+  const baseUrl = supabasePublicUrl();
+  const serviceKey = value("SUPABASE_SERVICE_ROLE_KEY");
+  if (!baseUrl || !serviceKey) throw new Error("Missing Supabase REST settings.");
+  const response = await fetch(`${baseUrl}/rest/v1/${resource}`, {
+    method,
+    headers: {
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+      "Content-Type": "application/json",
+      ...headers
+    },
+    body: body === null ? undefined : JSON.stringify(body)
+  });
+  const text = await response.text();
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = { message: text };
+  }
+  if (!response.ok) {
+    throw new Error(data?.message || data?.msg || data?.error || text || `Supabase REST failed: ${response.status}`);
+  }
+  return data;
+}
+
+const eq = (value) => encodeURIComponent(String(value || ""));
+
+async function restTable(table, query = "select=*") {
+  return restRequest(`${table}?${query}`);
+}
+
 function databaseUrl() {
   if (value("SUPABASE_DATABASE_URL")) return value("SUPABASE_DATABASE_URL");
   const ref = projectRef();
@@ -87,7 +128,7 @@ function safeDate(value) {
 
 async function ensureSupabaseReady() {
   if (!isSupabaseConfigured()) return false;
-  if (value("HOSTED_DEMO") === "true") return true;
+  if (hostedRestMode()) return true;
   await initializeSupabaseSchema();
   return true;
 }
@@ -122,6 +163,28 @@ export async function upsertSupabaseCampaign(campaign) {
 }
 
 export async function upsertSupabaseProject(project) {
+  if (hostedRestMode()) {
+    const [row] = await restRequest("cf_projects?on_conflict=name", {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates,return=representation" },
+      body: {
+        name: project.name,
+        type: project.type || "ai-generator",
+        folder_id: project.folderId || null,
+        client_id: project.clientId || null,
+        campaign_id: project.campaignId || null,
+        assigned_staff_id: project.assignedStaffId || null,
+        reviewer_id: project.reviewerId || null,
+        priority: project.priority || "normal",
+        approval_status: project.approvalStatus || "draft",
+        approval_feedback: project.approvalFeedback || null,
+        local_path: `projects/${project.name}`,
+        created_at: safeDate(project.createdAt),
+        updated_at: new Date().toISOString()
+      }
+    });
+    return row || { skipped: false };
+  }
   if (!await ensureSupabaseReady()) return { skipped: true };
   await getPool().query(`
     insert into cf_projects (
@@ -159,6 +222,10 @@ export async function upsertSupabaseProject(project) {
 }
 
 export async function deleteSupabaseProject(projectName) {
+  if (hostedRestMode()) {
+    await restRequest(`cf_projects?name=eq.${eq(projectName)}`, { method: "DELETE" });
+    return { skipped: false };
+  }
   if (!await ensureSupabaseReady()) return { skipped: true };
   await getPool().query("delete from cf_projects where name = $1", [projectName]);
   return { skipped: false };
@@ -204,6 +271,34 @@ function mapProjectSummary(row) {
 }
 
 export async function listSupabaseProjectSummaries() {
+  if (hostedRestMode()) {
+    const [projects, assets, renders, clips] = await Promise.all([
+      restTable("cf_projects", "select=*"),
+      restTable("cf_assets", "select=*"),
+      restTable("cf_render_jobs", "select=*"),
+      restTable("cf_clip_candidates", "select=*")
+    ]);
+    return projects.map((project) => {
+      const projectAssets = assets.filter((asset) => asset.project_name === project.name);
+      const projectRenders = renders.filter((render) => render.project_name === project.name);
+      const projectClips = clips.filter((clip) => clip.project_name === project.name);
+      return mapProjectSummary({
+        ...project,
+        reference_count: projectAssets.filter((asset) => asset.kind === "reference-video").length,
+        product_count: projectAssets.filter((asset) => asset.kind === "product-image").length,
+        character_count: projectAssets.filter((asset) => asset.kind === "character-reference").length,
+        reaction_count: projectAssets.filter((asset) => asset.kind === "reaction-character").length,
+        clipper_source_count: projectAssets.filter((asset) => asset.kind === "clipper-source").length,
+        image_count: projectAssets.filter((asset) => asset.media_type === "image").length,
+        video_count: projectAssets.filter((asset) => asset.media_type === "video").length,
+        audio_count: projectAssets.filter((asset) => asset.media_type === "audio").length,
+        render_count: projectRenders.length,
+        clip_render_count: projectRenders.filter((render) => render.render_type === "clip" || String(render.output_path || "").startsWith("clips/") || render.output_path === "final-clip.mp4").length,
+        ugc_count: projectRenders.filter((render) => render.output_path === "final.mp4" || String(render.output_path || "").includes("ugc")).length,
+        clip_candidate_count: projectClips.length
+      });
+    }).sort((a, b) => String(b.name).localeCompare(String(a.name)));
+  }
   if (!await ensureSupabaseReady()) return [];
   const result = await getPool().query(`
     select
@@ -231,6 +326,37 @@ export async function listSupabaseProjectSummaries() {
 }
 
 export async function listSupabaseOrganization() {
+  if (hostedRestMode()) {
+    const [clients, campaigns, staff] = await Promise.all([
+      restTable("cf_clients", "select=*&order=name.asc"),
+      restTable("cf_campaigns", "select=*&order=created_at.desc"),
+      restTable("cf_users", "select=*&order=name.asc")
+    ]);
+    return {
+      clients: clients.map((row) => ({
+        id: row.id,
+        name: row.name,
+        industry: row.industry || "",
+        contact: row.contact || "",
+        createdAt: row.created_at
+      })),
+      campaigns: campaigns.map((row) => ({
+        id: row.id,
+        clientId: row.client_id || "",
+        name: row.name,
+        objective: row.objective || "",
+        status: row.status || "active",
+        createdAt: row.created_at
+      })),
+      staff: staff.map((row) => ({
+        id: row.id,
+        name: row.name,
+        role: row.role || "staff-editor",
+        email: row.email || "",
+        clientId: row.client_id || ""
+      }))
+    };
+  }
   if (!await ensureSupabaseReady()) return { clients: [], campaigns: [], staff: [] };
   const [clients, campaigns, staff] = await Promise.all([
     getPool().query("select id, name, industry, contact, created_at from cf_clients order by name asc"),
@@ -264,6 +390,32 @@ export async function listSupabaseOrganization() {
 }
 
 export async function listSupabaseMediaItems() {
+  if (hostedRestMode()) {
+    const [renders, projects] = await Promise.all([
+      restTable("cf_render_jobs", "select=*&order=created_at.desc"),
+      restTable("cf_projects", "select=*")
+    ]);
+    const projectMap = new Map(projects.map((project) => [project.name, project]));
+    return renders.map((row) => {
+      const project = projectMap.get(row.project_name) || {};
+      return {
+        id: row.id,
+        name: row.output_path,
+        project: row.project_name,
+        projectType: project.type || row.mode || "ai-generator",
+        clientId: project.client_id || "",
+        campaignId: project.campaign_id || "",
+        assignedStaffId: project.assigned_staff_id || "",
+        reviewerId: project.reviewer_id || "",
+        approvalStatus: project.approval_status || "draft",
+        approvalFeedback: project.approval_feedback || "",
+        status: row.status || "completed",
+        renderType: row.render_type || "",
+        url: row.output_url || "",
+        createdAt: row.created_at
+      };
+    });
+  }
   if (!await ensureSupabaseReady()) return [];
   const result = await getPool().query(`
     select
@@ -304,18 +456,11 @@ export async function listSupabaseMediaItems() {
   }));
 }
 
-export async function supabaseProjectData(projectName) {
-  if (!await ensureSupabaseReady()) return null;
-  const summaries = await listSupabaseProjectSummaries();
-  const summary = summaries.find((project) => project.name === projectName);
-  if (!summary) return null;
-  const [organization, assets, renders, candidates] = await Promise.all([
-    listSupabaseOrganization(),
-    getPool().query("select * from cf_assets where project_name = $1 order by created_at desc", [projectName]),
-    getPool().query("select * from cf_render_jobs where project_name = $1 order by created_at desc", [projectName]),
-    getPool().query("select * from cf_clip_candidates where project_name = $1 order by score desc, start_seconds asc", [projectName])
-  ]);
-  const assetItems = assets.rows.map((row) => ({
+function buildSupabaseProjectData({ summary, organization, assets, renders, candidates }) {
+  const assetRows = Array.isArray(assets) ? assets : assets.rows;
+  const renderRows = Array.isArray(renders) ? renders : renders.rows;
+  const candidateRows = Array.isArray(candidates) ? candidates : candidates.rows;
+  const assetItems = assetRows.map((row) => ({
     id: row.id,
     kind: row.kind,
     name: row.name,
@@ -323,14 +468,14 @@ export async function supabaseProjectData(projectName) {
     url: row.url || "",
     mediaType: row.media_type || ""
   }));
-  const renderItems = renders.rows.map((row) => ({
+  const renderItems = renderRows.map((row) => ({
     name: row.output_path,
     url: row.output_url || "",
     status: row.status,
     renderType: row.render_type || "",
     createdAt: row.created_at
   }));
-  const clipCandidates = candidates.rows.map((row) => ({
+  const clipCandidates = candidateRows.map((row) => ({
     id: String(row.id).includes(":") ? String(row.id).split(":").pop() : row.id,
     title: row.title || "Highlight",
     start: Number(row.start_seconds || 0),
@@ -373,7 +518,41 @@ export async function supabaseProjectData(projectName) {
   };
 }
 
+export async function supabaseProjectData(projectName) {
+  if (hostedRestMode()) {
+    const summaries = await listSupabaseProjectSummaries();
+    const summary = summaries.find((project) => project.name === projectName);
+    if (!summary) return null;
+    const [organization, assets, renders, candidates] = await Promise.all([
+      listSupabaseOrganization(),
+      restTable("cf_assets", `select=*&project_name=eq.${eq(projectName)}&order=created_at.desc`),
+      restTable("cf_render_jobs", `select=*&project_name=eq.${eq(projectName)}&order=created_at.desc`),
+      restTable("cf_clip_candidates", `select=*&project_name=eq.${eq(projectName)}&order=score.desc,start_seconds.asc`)
+    ]);
+    return buildSupabaseProjectData({ projectName, summary, organization, assets, renders, candidates });
+  }
+  if (!await ensureSupabaseReady()) return null;
+  const summaries = await listSupabaseProjectSummaries();
+  const summary = summaries.find((project) => project.name === projectName);
+  if (!summary) return null;
+  const [organization, assets, renders, candidates] = await Promise.all([
+    listSupabaseOrganization(),
+    getPool().query("select * from cf_assets where project_name = $1 order by created_at desc", [projectName]),
+    getPool().query("select * from cf_render_jobs where project_name = $1 order by created_at desc", [projectName]),
+    getPool().query("select * from cf_clip_candidates where project_name = $1 order by score desc, start_seconds asc", [projectName])
+  ]);
+  return buildSupabaseProjectData({ summary, organization, assets, renders, candidates });
+}
+
 export async function recordSupabaseApprovalEvent({ projectName, status, feedback = "" }) {
+  if (hostedRestMode()) {
+    await restRequest("cf_approval_events", {
+      method: "POST",
+      headers: { Prefer: "return=minimal" },
+      body: { project_name: projectName, status, feedback: feedback || null }
+    });
+    return { skipped: false };
+  }
   if (!projectName || !status || !await ensureSupabaseReady()) return { skipped: true };
   await getPool().query(`
     insert into cf_approval_events (project_name, status, feedback)
@@ -480,6 +659,18 @@ export async function upsertSupabaseUser(user) {
 }
 
 export async function findSupabaseUserProfile({ authUserId = "", email = "" } = {}) {
+  if (hostedRestMode()) {
+    try {
+      const filters = [];
+      if (authUserId) filters.push(`auth_user_id.eq.${eq(authUserId)}`);
+      if (email) filters.push(`email.ilike.${eq(email)}`);
+      if (!filters.length) return null;
+      const rows = await restTable("cf_users", `select=*&or=(${filters.join(",")})&limit=1`);
+      return mapSupabaseUser(rows[0]);
+    } catch {
+      return null;
+    }
+  }
   if (!isSupabaseConfigured()) return null;
   try {
     const result = await getPool().query(`
@@ -514,6 +705,21 @@ function mapProductionJob(row) {
 }
 
 export async function createSupabaseProductionJob(job) {
+  if (hostedRestMode()) {
+    const [row] = await restRequest("cf_production_jobs", {
+      method: "POST",
+      headers: { Prefer: "return=representation" },
+      body: {
+        project_name: job.projectName,
+        job_type: job.jobType,
+        status: job.status || "queued",
+        payload: job.payload || {},
+        requested_by: job.requestedBy || null,
+        updated_at: new Date().toISOString()
+      }
+    });
+    return mapProductionJob(row);
+  }
   if (!await ensureSupabaseReady()) throw new Error("Supabase is not configured.");
   const result = await getPool().query(`
     insert into cf_production_jobs (project_name, job_type, status, payload, requested_by, updated_at)
@@ -524,6 +730,12 @@ export async function createSupabaseProductionJob(job) {
 }
 
 export async function listSupabaseProductionJobs({ projectName = "", status = "", limit = 50 } = {}) {
+  if (hostedRestMode()) {
+    const filters = ["select=*", "order=created_at.desc", `limit=${Math.max(1, Math.min(Number(limit) || 50, 200))}`];
+    if (projectName) filters.push(`project_name=eq.${eq(projectName)}`);
+    if (status) filters.push(`status=eq.${eq(status)}`);
+    return (await restTable("cf_production_jobs", filters.join("&"))).map(mapProductionJob);
+  }
   if (!await ensureSupabaseReady()) return [];
   const clauses = [];
   const params = [];
