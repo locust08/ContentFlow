@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { deliverVariationOutputs, runWorkerTick } from "../src/worker/productionWorker.js";
+import { createProductionWorker, deliverVariationOutputs, runWorkerTick } from "../src/worker/productionWorker.js";
 
 function variationResult() {
   return {
@@ -108,4 +108,116 @@ test("marks a partial variation job failed and persists its complete result", as
   assert.equal(updates[0].result, result);
   assert.equal(updates[0].result.outputs.length, 2);
   assert.match(updates[0].error, /1 variation output failed/i);
+});
+
+test("reports an idle heartbeat when no production job is available", async () => {
+  const heartbeats = [];
+  const worker = createProductionWorker({
+    workerId: "test-worker",
+    workerName: "Test Worker",
+    hostname: "test-host",
+    claimJob: async () => null,
+    updateHeartbeat: async (heartbeat) => heartbeats.push(heartbeat),
+    now: () => new Date("2026-07-14T00:00:00.000Z")
+  });
+
+  assert.equal(await worker.tick(), false);
+  assert.deepEqual(heartbeats, [{
+    workerId: "test-worker",
+    workerName: "Test Worker",
+    hostname: "test-host",
+    status: "online",
+    currentJobId: "",
+    capabilities: Array.from(worker.capabilities),
+    lastSeenAt: "2026-07-14T00:00:00.000Z"
+  }]);
+});
+
+test("reports busy then idle heartbeats and persists success milestones in order", async () => {
+  const heartbeats = [];
+  const updates = [];
+  const result = { outputUrl: "https://example.test/final.mp4" };
+  const worker = createProductionWorker({
+    workerId: "test-worker",
+    workerName: "Test Worker",
+    claimJob: async () => ({ id: "job-1", projectName: "demo", jobType: "pipeline", payload: {} }),
+    updateJob: async (id, patch) => updates.push({ id, patch }),
+    updateHeartbeat: async (heartbeat) => heartbeats.push(heartbeat),
+    processJob: async () => result,
+    now: () => new Date("2026-07-14T00:00:00.000Z")
+  });
+
+  assert.equal(await worker.tick(), true);
+  assert.equal(heartbeats.some((item) => item.currentJobId === "job-1" && item.status === "busy"), true);
+  assert.equal(heartbeats.at(-1).status, "online");
+  assert.equal(heartbeats.at(-1).currentJobId, "");
+  assert.deepEqual(updates.map((item) => item.patch.progress), [25, 75, 90, 100]);
+  assert.deepEqual(updates.at(-1), {
+    id: "job-1",
+    patch: {
+      status: "completed",
+      progress: 100,
+      progressMessage: "Completed",
+      outputUrl: result.outputUrl,
+      result
+    }
+  });
+});
+
+test("retains the last milestone, stores only the error message, and clears busy state after failure", async () => {
+  const heartbeats = [];
+  const updates = [];
+  const worker = createProductionWorker({
+    workerId: "test-worker",
+    workerName: "Test Worker",
+    claimJob: async () => ({ id: "job-1", projectName: "demo", jobType: "pipeline", payload: {} }),
+    updateJob: async (id, patch) => updates.push({ id, patch }),
+    updateHeartbeat: async (heartbeat) => heartbeats.push(heartbeat),
+    processJob: async () => {
+      throw new Error("provider request failed");
+    },
+    now: () => new Date("2026-07-14T00:00:00.000Z")
+  });
+
+  assert.equal(await worker.tick(), true);
+  assert.deepEqual(updates.map((item) => item.patch.progress), [25, 25]);
+  assert.deepEqual(updates.at(-1), {
+    id: "job-1",
+    patch: {
+      status: "failed",
+      progress: 25,
+      error: "provider request failed"
+    }
+  });
+  assert.equal(heartbeats.at(-1).status, "online");
+  assert.equal(heartbeats.at(-1).currentJobId, "");
+});
+
+test("schedules five-second heartbeats and clears the timer during shutdown", async () => {
+  const heartbeats = [];
+  const timers = [];
+  const cleared = [];
+  const worker = createProductionWorker({
+    workerId: "test-worker",
+    workerName: "Test Worker",
+    claimJob: async () => null,
+    updateHeartbeat: async (heartbeat) => heartbeats.push(heartbeat),
+    setIntervalFn: (callback, ms) => {
+      timers.push({ callback, ms });
+      return 0;
+    },
+    clearIntervalFn: (timer) => cleared.push(timer)
+  });
+
+  await worker.start();
+  await worker.start();
+  assert.equal(timers.length, 1);
+  assert.equal(timers[0].ms, 5000);
+  timers[0].callback();
+  await Promise.resolve();
+  worker.shutdown();
+  worker.shutdown();
+
+  assert.equal(heartbeats.length, 2);
+  assert.deepEqual(cleared, [0]);
 });

@@ -1,4 +1,5 @@
 import path from "node:path";
+import os from "node:os";
 import { loadEnv, rootDir, projectPath } from "../config.js";
 import { analyzeClipperSource, downloadClipperSource, selectClipperHighlight } from "../services/clipperService.js";
 import { generateContentIdeas, generateScriptPlan } from "../services/contentReplicator.js";
@@ -13,10 +14,12 @@ import { renderClipperVariations } from "../services/clipperVariations.js";
 import {
   claimNextSupabaseProductionJob,
   updateSupabaseProductionJob,
+  upsertSupabaseWorkerHeartbeat,
   uploadSupabaseStorageFile,
   upsertSupabaseClipCandidates,
   upsertSupabaseRenderJob
 } from "../services/supabaseDb.js";
+import { PRODUCTION_JOB_TYPES } from "../services/productionJobs.js";
 import { transcribeGeneratedVideo } from "../services/subtitlePlanner.js";
 import { extractAudio, extractFrames } from "../services/video.js";
 import { fileExists, readJson, writeJson } from "../utils/files.js";
@@ -65,7 +68,7 @@ async function recordRenders(project, result) {
   if (!output) return "";
   const localPath = path.join(projectPath(project), output);
   const outputUrl = await uploadSupabaseStorageFile(localPath, `projects/${project}/${output}`).catch((error) => {
-    console.warn(`[worker] storage upload skipped: ${error.message}`);
+    console.warn("[worker] storage upload skipped");
     return "";
   });
   await upsertSupabaseRenderJob({
@@ -239,23 +242,147 @@ export async function runWorkerTick({
       status: "failed",
       error: errorMessage(error)
     });
-    console.error(`[worker] failed ${job.id}: ${errorMessage(error)}`);
+    console.error(`[worker] failed ${job.id}`);
   }
   return true;
 }
 
-export async function runWorker({ once = false } = {}) {
+export function createProductionWorker({
+  workerId = process.env.CONTENTFLOW_WORKER_ID || os.hostname(),
+  workerName = process.env.CONTENTFLOW_WORKER_NAME || os.hostname(),
+  hostname = os.hostname(),
+  capabilities = Array.from(PRODUCTION_JOB_TYPES),
+  claimJob = claimNextSupabaseProductionJob,
+  updateJob = updateSupabaseProductionJob,
+  updateHeartbeat = upsertSupabaseWorkerHeartbeat,
+  processJob: process = processJob,
+  now = () => new Date(),
+  setIntervalFn = setInterval,
+  clearIntervalFn = clearInterval,
+  heartbeatMs = 5000
+} = {}) {
+  let currentJobId = "";
+  let heartbeatTimer = null;
+
+  async function heartbeat() {
+    await updateHeartbeat({
+      workerId,
+      workerName,
+      hostname,
+      status: currentJobId ? "busy" : "online",
+      currentJobId,
+      capabilities: Array.from(capabilities),
+      lastSeenAt: now().toISOString()
+    });
+  }
+
+  async function tick() {
+    const job = await claimJob();
+    if (!job) {
+      await heartbeat();
+      return false;
+    }
+
+    currentJobId = job.id;
+    let progress = 25;
+    try {
+      await heartbeat();
+      await updateJob(job.id, {
+        status: "processing",
+        progress,
+        progressMessage: "Preparing production inputs"
+      });
+      const result = await process(job);
+      const variationFailed = result?.mode === "clipper-character-variations" && result.failed > 0;
+      if (variationFailed) {
+        await updateJob(job.id, {
+          status: "failed",
+          progress,
+          error: `${result.failed} variation output${result.failed === 1 ? "" : "s"} failed.`,
+          result
+        });
+        return true;
+      }
+
+      progress = 75;
+      await updateJob(job.id, {
+        status: "processing",
+        progress,
+        progressMessage: "Production operation completed",
+        result
+      });
+      progress = 90;
+      await updateJob(job.id, {
+        status: "processing",
+        progress,
+        progressMessage: "Saving output records",
+        result
+      });
+      await updateJob(job.id, {
+        status: "completed",
+        progress: 100,
+        progressMessage: "Completed",
+        outputUrl: result?.outputUrl || "",
+        result
+      });
+      return true;
+    } catch (error) {
+      await updateJob(job.id, {
+        status: "failed",
+        progress,
+        error: errorMessage(error)
+      });
+      return true;
+    } finally {
+      currentJobId = "";
+      await heartbeat();
+    }
+  }
+
+  async function start() {
+    if (heartbeatTimer !== null) return;
+    await heartbeat();
+    heartbeatTimer = setIntervalFn(() => {
+      void heartbeat().catch(() => {});
+    }, heartbeatMs);
+  }
+
+  function shutdown() {
+    if (heartbeatTimer === null) return;
+    clearIntervalFn(heartbeatTimer);
+    heartbeatTimer = null;
+  }
+
+  return Object.freeze({
+    workerId,
+    workerName,
+    hostname,
+    capabilities: Array.from(capabilities),
+    heartbeat,
+    tick,
+    start,
+    shutdown
+  });
+}
+
+export async function runWorker({ once = false, worker, ...dependencies } = {}) {
+  const runtime = worker || createProductionWorker(dependencies);
   console.log(`[worker] ContentFlow production worker started${once ? " (once)" : ""}`);
-  do {
-    const processed = await runWorkerTick();
-    if (once) break;
-    if (!processed) await new Promise((resolve) => setTimeout(resolve, pollMs));
-  } while (true);
+  await runtime.start();
+  try {
+    do {
+      const processed = await runtime.tick();
+      if (once) break;
+      if (!processed) await new Promise((resolve) => setTimeout(resolve, pollMs));
+    } while (true);
+  } finally {
+    runtime.shutdown();
+  }
 }
 
 if (import.meta.url === `file:///${process.argv[1]?.replace(/\\/g, "/")}`) {
   runWorker({ once: process.argv.includes("--once") }).catch((error) => {
-    console.error(error);
+    console.error("[worker] fatal runtime error");
     process.exitCode = 1;
   });
 }
