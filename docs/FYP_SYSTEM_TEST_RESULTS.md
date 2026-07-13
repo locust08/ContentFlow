@@ -6,7 +6,7 @@
 |---|---|
 | Test date | 2026-07-14, Asia/Kuala_Lumpur |
 | Branch | `codex/production-command-center` |
-| Tested commit | `97835064c9f2fdb6426092b08939451e6a1e83e9` |
+| Tested code commit | `7e6c02615e2ebe5c84c79e91bd69600e70d9a105` |
 | Web runtime | Node.js, React/Vite dashboard, local API server |
 | Production runtime | Local worker `MSI`, Remotion, ffmpeg, OpenAI, LibTV |
 | Shared backend | Supabase PostgreSQL, Auth, and Storage |
@@ -16,20 +16,35 @@ The tests below validate the hybrid architecture: the hosted dashboard records p
 
 ## Executive Result
 
-The management, queue, worker, Auto Clipper, transcription, Remotion rendering, role access, approval, analytics, and mobile workflows passed. The live AI UGC generation step is the only blocked integration: LibTV retired its legacy Skill upload interface and now requires the workstation to authenticate with the new LibTV CLI. The CLI is installed, but account authorization and the Kling O3 model mapping must be completed before this step can be re-tested.
+The automated suites and the tested management, queue, worker, prepared-media, transcription, Remotion rendering, role access, approval, analytics, and mobile paths passed. The hosted Auto Clipper test confirmed that a browser-selected highlight and stable reaction ID persist into the queued worker payload. The final run did not continue that hosted request through source-link download and worker rendering; Auto Clipper execution evidence still began from prepared local source and transcript data. The two character-variation files were reachable over HTTP, but their frames were not manually inspected in this run, so their character-identity expectations remain partial rather than passed.
+
+Live AI UGC generation is separately blocked by LibTV's migration from its legacy Skill upload interface to the authenticated CLI. The CLI is installed, but account authorization and Kling O3 model mapping must be completed before that integration can be re-tested. This external blocker does not change the partially verified Auto Clipper evidence boundaries.
 
 | Result | Count |
 |---|---:|
-| Pass | 28 |
-| Blocked by external provider migration | 1 |
-| Fail | 0 |
+| PASS | 26 |
+| PARTIAL | 3 |
+| NOT TESTED | 0 |
+| BLOCKED - external LibTV migration | 1 |
+| FAIL | 0 |
+| **Total recorded test cases** | **30** |
+
+### Evidence Boundary Summary
+
+| Evidence class | Result | Scope |
+|---|---|---|
+| Automated verification | PASS | 5/5 command-based checks passed. |
+| Operational and prepared-media integration | PASS | 21 test cases passed, including queue/worker behavior and local prepared-media transcription/rendering. |
+| Character visual identity | PARTIAL | 2 output URLs returned HTTP 200; expected character identity was not manually verified frame-by-frame in this final run. |
+| Hosted Auto Clipper handoff | PARTIAL | Highlight and reaction selection reached the queued payload; source-link download and worker rendering were not exercised from that hosted job. |
+| Live LibTV generation | BLOCKED | External provider migration requires CLI authentication and adapter/model remapping. |
 
 ## Automated Verification
 
 | Test ID | Module | Input | Expected | Actual | Status | Evidence |
 |---|---|---|---|---|---|---|
 | AV-01 | React frontend | Full Vitest suite | All frontend tests pass | 10 files, 23 tests passed | PASS | `npm.cmd run test:frontend` |
-| AV-02 | Backend and services | Full Node test suite | All tests pass | 54 tests passed, 0 failed | PASS | `node --test` |
+| AV-02 | Backend and services | Full Node test suite | All tests pass | 62 tests passed, 0 failed | PASS | `node --test` |
 | AV-03 | Production build | Vite build | Build exits successfully | Production bundle generated successfully | PASS | `npm.cmd run build` |
 | AV-04 | Remotion | Composition discovery | Composition can be discovered | `ContentMachine` discovered, exit code 0 | PASS | `npx.cmd remotion compositions src/remotion/index.jsx --log=error` |
 | AV-05 | Dependency security | Production dependencies | No known production vulnerabilities | 0 vulnerabilities | PASS | `npm.cmd audit --omit=dev` |
@@ -51,11 +66,12 @@ The management, queue, worker, Auto Clipper, transcription, Remotion rendering, 
 
 | Test ID | Module | Input | Expected | Actual | Status | Evidence |
 |---|---|---|---|---|---|---|
-| CL-01 | Source and highlight data | Prepared source, transcript, and selected highlight | Worker can use the selected moment | Selected highlight loaded and rendered consistently | PASS | Project `fyp-evidence-queue-20260714` |
+| CL-01 | Prepared source and highlight data | Local prepared source, transcript, and selected highlight | Worker can use the prepared selected moment | Prepared selection loaded and rendered consistently; this did not test the hosted source-link/selection handoff | PASS | Project `fyp-evidence-queue-20260714` |
 | CL-02 | Single clip render | One selected highlight and one reaction | One vertical MP4 is produced | Render completed at 100% and uploaded | PASS | [Final clip](https://qyxmckrjdkrnkgsdteik.supabase.co/storage/v1/object/public/contentflow-media/projects/fyp-evidence-queue-20260714/renders/final-clip.mp4) |
-| CL-03 | Character variations | Same highlight with two reaction characters | One MP4 per selected character | 2 completed, 0 failed; timing and captions were shared | PASS | Job `d3040b4f-cf05-4cd6-bac2-2b1ec4805a95` |
-| CL-04 | Variation output A | `Man_reassuring_viewer_gently_202605201458.mp4` | Character A appears in its own output | Public MP4 returned HTTP 200 | PASS | [Character A output](https://qyxmckrjdkrnkgsdteik.supabase.co/storage/v1/object/public/contentflow-media/projects/fyp-evidence-queue-20260714/renders/clips/char-01-man-reassuring-viewer-gently-202605201458__clip-titanium-ceramic-first-titanium-phone-i-ve-ever-held.mp4) |
-| CL-05 | Variation output B | Legacy reaction character | Character B appears in its own output | Public MP4 returned HTTP 200 | PASS | [Character B output](https://qyxmckrjdkrnkgsdteik.supabase.co/storage/v1/object/public/contentflow-media/projects/fyp-evidence-queue-20260714/renders/clips/char-02-reaction-character__clip-titanium-ceramic-first-titanium-phone-i-ve-ever-held.mp4) |
+| CL-03 | Character variation production | Same highlight with two selected reaction-character inputs | One MP4 is produced per selected input | 2 completed, 0 failed; timing and captions were shared. This confirms output production, not visual identity. | PASS | Job `d3040b4f-cf05-4cd6-bac2-2b1ec4805a95` |
+| CL-04 | Variation output A identity | `Man_reassuring_viewer_gently_202605201458.mp4` | Character A appears in its own output | Public MP4 returned HTTP 200, but frames were not manually inspected for character identity in this final evidence run | PARTIAL | [Character A output](https://qyxmckrjdkrnkgsdteik.supabase.co/storage/v1/object/public/contentflow-media/projects/fyp-evidence-queue-20260714/renders/clips/char-01-man-reassuring-viewer-gently-202605201458__clip-titanium-ceramic-first-titanium-phone-i-ve-ever-held.mp4) |
+| CL-05 | Variation output B identity | Legacy reaction character | Character B appears in its own output | Public MP4 returned HTTP 200, but frames were not manually inspected for character identity in this final evidence run | PARTIAL | [Character B output](https://qyxmckrjdkrnkgsdteik.supabase.co/storage/v1/object/public/contentflow-media/projects/fyp-evidence-queue-20260714/renders/clips/char-02-reaction-character__clip-titanium-ceramic-first-titanium-phone-i-ve-ever-held.mp4) |
+| CL-06 | Hosted source/selection handoff | Highlight and reaction selected in the hosted dashboard | Hosted state reaches the production worker and renders the selected moment | Highlight `c4` and the stable reaction ID persisted into the queued payload; the job was then cancelled safely before claim, so hosted source-link download and rendering were not exercised | PARTIAL | Job `45fad43f-6624-4cb9-9bc4-9f0ea4a92b38`, cancelled at attempt 0 |
 
 ## AI Generator Workflow
 
@@ -99,11 +115,11 @@ For a reliable FYP demonstration:
 1. Log in as Admin and open the Production Command Center.
 2. Create a production job while worker `MSI` is offline to demonstrate safe queuing.
 3. Start `npm run worker` on the production workstation and show progress changing from queued to processing to completed.
-4. Open the two Auto Clipper character-variation outputs to demonstrate one clip rendered with different reaction characters.
+4. Open the two Auto Clipper character-variation outputs and visually confirm the expected reaction character in each; this completes the identity check not performed during the final evidence run.
 5. Log in as Staff on `/mobile.html` and show assigned work and upload/review actions.
 6. Log in as Client and demonstrate media-only access, approval, feedback, and filtered analytics.
 7. Explain that LibTV generation is an external CLI migration item, while the prepared-media path keeps the hosted FYP demo stable.
 
 ## Conclusion
 
-ContentFlow AI meets the proposal's core information-system requirements: authenticated role separation, web and mobile modules, Supabase-backed project and media records, production job management, local processing, hosted media delivery, client approval, and measurable analytics. The system is demonstration-ready with prepared outputs. Full live generation readiness requires only the documented LibTV CLI migration and account authorization.
+ContentFlow AI meets the proposal's core information-system requirements: authenticated role separation, web and mobile modules, Supabase-backed project and media records, production job management, local processing, hosted media delivery, client approval, and measurable analytics. The system is demonstration-ready with prepared outputs. A complete readiness claim still requires three distinct closures: continue a hosted Auto Clipper source-link request through worker rendering, visually verify the identity in both character-variation outputs, and complete the documented LibTV CLI migration and account authorization for new live UGC generation.
