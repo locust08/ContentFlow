@@ -1,14 +1,42 @@
 html {
-  background: #e8e9e7;
+  background: #f1f2f3;
 }
 
 body {
   min-width: 320px;
-  background-color: #e8e9e7;
-  background-image: url("/assets/brand/contentflow-studio.webp");
-  background-size: cover;
+  background: transparent;
+}
+
+#root {
+  position: relative;
+  isolation: isolate;
+  min-height: 100dvh;
+}
+
+#root::before,
+#root::after {
+  content: "";
+  position: fixed;
+  pointer-events: none;
+  inset: 0;
+}
+
+#root::before {
+  z-index: -2;
+  inset: -5%;
+  background-color: #f1f2f3;
+  background-image: url("/assets/brand/contentflow-holographic.webp");
+  background-repeat: no-repeat;
   background-position: center;
-  background-attachment: fixed;
+  background-size: 100% 100%;
+  transform: translate3d(0, 0, 0) scale(1.04);
+  animation: holographic-drift var(--motion-ambient) infinite alternate;
+  will-change: transform;
+}
+
+#root::after {
+  z-index: -1;
+  background: var(--holographic-veil);
 }
 
 .app-shell {
@@ -16,7 +44,7 @@ body {
   grid-template-columns: var(--sidebar) minmax(0, 1fr);
   gap: 14px;
   padding: 14px;
-  background: rgba(244, 244, 246, 0.5);
+  background: rgba(244, 244, 246, 0.2);
 }
 
 .app-sidebar,
@@ -52,7 +80,7 @@ body {
   overflow: clip;
   border: 1px solid var(--glass-edge);
   border-radius: 8px;
-  background: rgba(249, 249, 250, 0.68);
+  background: rgba(249, 249, 250, 0.74);
 }
 
 .topbar {
@@ -71,6 +99,13 @@ body {
   margin-inline: auto;
   padding: 28px 28px 118px;
 }
+
+.page-frame > * {
+  animation: page-enter var(--motion-emphasized) both;
+}
+
+.page-frame > *:nth-child(2) { animation-delay: 40ms; }
+.page-frame > *:nth-child(3) { animation-delay: 80ms; }
 
 .page-stack,
 .studio-page,
@@ -412,11 +447,51 @@ textarea:focus {
 .blueprint-list article,
 .empty-state,
 .file-picker {
-  background: rgba(255,255,255,.68);
+  background: rgba(255,255,255,.86);
 }
 
 .data-table {
-  background: rgba(255,255,255,.46);
+  background: rgba(255,255,255,.82);
+}
+
+.form-grid,
+.asset-card,
+.output-section,
+.media-gallery,
+.workspace-panel,
+.technical-panel {
+  background-color: rgba(255,255,255,.84);
+}
+
+.quick-tool,
+.project-tile,
+.highlight-card,
+.reaction-card,
+.video-card,
+.media-card,
+.btn,
+.icon-button {
+  transition: transform var(--motion-standard), box-shadow var(--motion-standard), border-color var(--motion-fast), background-color var(--motion-fast), opacity var(--motion-fast);
+}
+
+.quick-tool:hover,
+.project-tile:hover,
+.highlight-card:hover,
+.reaction-card:hover,
+.video-card:hover,
+.media-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 42px rgba(36,36,39,.14);
+}
+
+.btn:hover,
+.icon-button:hover {
+  transform: translateY(-1px);
+}
+
+.btn:active,
+.icon-button:active {
+  transform: translateY(0) scale(.985);
 }
 
 .data-table tbody tr:hover {
@@ -432,11 +507,15 @@ textarea:focus {
   -webkit-backdrop-filter: blur(24px) saturate(1.08);
 }
 
+.modal { animation: modal-enter var(--motion-emphasized) both; }
+.side-drawer { animation: drawer-enter var(--motion-emphasized) both; }
+
 .modal-backdrop,
 .drawer-backdrop {
   background: rgba(41,41,43,.34);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  animation: backdrop-enter var(--motion-standard) both;
 }
 
 .production-action-bar {
@@ -461,10 +540,7 @@ textarea:focus {
 
 .login-screen,
 .loading-screen {
-  background-color: rgba(236,237,235,.42);
-  background-image: url("/assets/brand/contentflow-studio.webp");
-  background-size: cover;
-  background-position: center;
+  background: transparent;
 }
 
 .login-card,
@@ -476,6 +552,43 @@ textarea:focus {
   box-shadow: var(--glass-shadow);
   backdrop-filter: blur(22px);
   -webkit-backdrop-filter: blur(22px);
+}
+
+
+@keyframes holographic-drift {
+  0% { transform: translate3d(-1.2%, -0.8%, 0) scale(1.04); }
+  50% { transform: translate3d(1%, 0.7%, 0) scale(1.065); }
+  100% { transform: translate3d(-0.4%, 1.1%, 0) scale(1.045); }
+}
+
+@keyframes page-enter {
+  from { opacity: 0; transform: translate3d(0, 10px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes modal-enter {
+  from { opacity: 0; transform: translate3d(0, 12px, 0) scale(.985); }
+  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@keyframes drawer-enter {
+  from { opacity: 0; transform: translate3d(24px, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes backdrop-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes progress-breathe {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,210,31,.12); }
+  50% { box-shadow: 0 0 0 6px rgba(255,210,31,.08); }
+}
+
+.flow-steps li.current > span,
+.production-progress [aria-current="step"] {
+  animation: progress-breathe 2.8s ease-in-out infinite;
 }
 
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
@@ -509,8 +622,9 @@ textarea:focus {
 }
 
 @media (max-width: 900px) {
-  body {
-    background-attachment: scroll;
+  #root::before {
+    animation: none;
+    transform: none;
   }
 
   .app-shell {
@@ -592,4 +706,14 @@ textarea:focus {
     animation-iteration-count: 1 !important;
     transition-duration: .01ms !important;
   }
+
+  #root::before { animation: none !important; transform: none !important; }
+  .quick-tool:hover,
+  .project-tile:hover,
+  .highlight-card:hover,
+  .reaction-card:hover,
+  .video-card:hover,
+  .media-card:hover,
+  .btn:hover,
+  .icon-button:hover { transform: none !important; }
 }

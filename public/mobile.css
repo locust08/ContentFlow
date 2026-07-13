@@ -10,6 +10,8 @@
   --surface: #ffffff;
   --surface-muted: #f5f6f6;
   --glass: rgba(255, 255, 255, 0.78);
+  --motion-standard: 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --motion-emphasized: 360ms cubic-bezier(0.16, 1, 0.3, 1);
   --success: #16713d;
   --error: #b63c3c;
   --shadow: 0 10px 28px rgba(21, 21, 21, 0.08);
@@ -23,14 +25,34 @@ html {
 }
 
 body {
+  position: relative;
+  isolation: isolate;
   min-width: 360px;
   min-height: 100vh;
   margin: 0;
   overflow-x: hidden;
   color: var(--ink);
-  font-family: Inter, Manrope, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: linear-gradient(140deg, #f8f8f6 0%, #eef0f1 48%, #e4e7e8 100%);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", Inter, "Segoe UI", sans-serif;
+  background: #f1f2f3;
   -webkit-font-smoothing: antialiased;
+}
+
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  z-index: -2;
+  inset: 0;
+  pointer-events: none;
+}
+
+body::before {
+  background: #f1f2f3 url("/assets/brand/contentflow-holographic.webp") center / 100% 100% no-repeat;
+}
+
+body::after {
+  z-index: -1;
+  background: rgba(248, 248, 249, .44);
 }
 
 [hidden] { display: none !important; }
@@ -48,7 +70,7 @@ button, .admin-link {
   line-height: 1.2;
   text-decoration: none;
   cursor: pointer;
-  transition: background-color 150ms ease, border-color 150ms ease, transform 150ms ease;
+  transition: background-color 160ms ease, border-color 160ms ease, transform var(--motion-standard), box-shadow var(--motion-standard);
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -97,7 +119,7 @@ img, video { display: block; width: 100%; background: #161616; }
 
 .mobile-header, .mobile-nav {
   border: 1px solid rgba(255, 255, 255, 0.86);
-  background: var(--glass);
+  background: rgba(255, 255, 255, .84);
   box-shadow: 0 4px 18px rgba(21, 21, 21, 0.06);
   backdrop-filter: blur(14px);
 }
@@ -148,10 +170,11 @@ img, video { display: block; width: 100%; background: #161616; }
 .eyebrow { margin: 0 0 6px; color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
 
 .mobile-view { min-width: 0; }
+.mobile-view:not([hidden]) { animation: mobile-page-enter var(--motion-emphasized) both; }
 .panel, .status-strip article {
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--surface);
+  background: rgba(255,255,255,.9);
   box-shadow: 0 4px 16px rgba(21, 21, 21, 0.04);
 }
 .panel { margin-top: 12px; padding: 16px; }
@@ -178,6 +201,13 @@ img, video { display: block; width: 100%; background: #161616; }
   text-align: left;
 }
 .project-card:hover { border-color: var(--line-strong); background: #f0f1f1; }
+.project-card,
+.media-card,
+.panel {
+  transition: transform var(--motion-standard), box-shadow var(--motion-standard), border-color 160ms ease;
+}
+.project-card:hover,
+.media-card:hover { transform: translateY(-2px); box-shadow: 0 14px 32px rgba(21,21,21,.12); }
 .project-card.active { border-color: #d5aa00; box-shadow: inset 4px 0 0 var(--accent); background: #fffced; }
 .project-card h3, .project-card p, .media-card p, .task-context p, .profile-panel p { margin: 0; }
 .project-card h3 { font-size: 16px; line-height: 1.3; }
@@ -228,6 +258,7 @@ img, video { display: block; width: 100%; background: #161616; }
   margin: 0 auto;
   border-radius: 8px;
   padding: 5px;
+  animation: mobile-nav-enter var(--motion-emphasized) both;
 }
 .mobile-nav button { display: grid; min-width: 0; min-height: 56px; gap: 3px; place-items: center; border: 0; border-radius: 6px; padding: 5px 3px; color: var(--muted); background: transparent; font-size: 18px; }
 .mobile-nav button strong { overflow: hidden; max-width: 100%; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
@@ -237,6 +268,16 @@ img, video { display: block; width: 100%; background: #161616; }
 .mobile-auth { position: fixed; z-index: 30; inset: 0; display: grid; place-items: center; overflow-y: auto; padding: 16px; background: rgba(21, 21, 21, 0.36); backdrop-filter: blur(10px); }
 .auth-card { display: grid; gap: 12px; width: min(100%, 420px); margin: 0; box-shadow: var(--shadow); }
 .auth-card h2, .auth-card p { margin: 0; }
+
+@keyframes mobile-page-enter {
+  from { opacity: 0; transform: translate3d(0, 9px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes mobile-nav-enter {
+  from { opacity: 0; transform: translate3d(0, 18px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
 
 @supports not (backdrop-filter: blur(1px)) {
   .mobile-header, .mobile-nav { background: rgba(255, 255, 255, 0.96); }
@@ -255,4 +296,5 @@ img, video { display: block; width: 100%; background: #161616; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+  .project-card:hover, .media-card:hover { transform: none !important; }
 }

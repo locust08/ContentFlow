@@ -30,7 +30,7 @@ test("mobile staff workspace keeps the task-first navigation and workflow bindin
   assert.match(js, /node\.hidden = text === "Ready"/);
 });
 
-test("mobile daylight-glass styles keep touch, motion, and narrow-screen safeguards", async () => {
+test("mobile holographic-glass styles keep touch, motion, and narrow-screen safeguards", async () => {
   const { css } = await mobileFiles();
 
   assert.match(css, /--accent:\s*#ffd21f/i);

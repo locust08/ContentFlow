@@ -1,10 +1,11 @@
-const CACHE_NAME = "contentflow-mobile-v1";
+const CACHE_NAME = "contentflow-mobile-v2";
 const APP_SHELL = [
   "/mobile.html",
-  "/mobile.css",
-  "/mobile.js",
+  "/mobile.css?v=holographic-apple-1",
+  "/mobile.js?v=holographic-apple-1",
   "/manifest.webmanifest",
-  "/icon.svg"
+  "/icon.svg",
+  "/assets/brand/contentflow-holographic.webp"
 ];
 
 self.addEventListener("install", (event) => {
