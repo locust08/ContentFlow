@@ -37,20 +37,28 @@ export function listClipperReactions(projectDir, project) {
       };
     });
   const knownPaths = new Set(manifestCharacters.map((character) => character.path));
+  const usedIds = new Set(manifestCharacters.map((character) => character.id).filter(Boolean));
 
   const legacyCharacters = fs.readdirSync(reactionDir)
     .filter((file) => /\.(png|jpg|jpeg|webp|mp4|mov|webm)$/i.test(file))
     .filter((file) => !knownPaths.has(`clipper/reaction/${file}`))
     .sort()
-    .map((file, index) => ({
-      id: `legacy-${slugify(path.parse(file).name) || index + 1}`,
-      name: path.parse(file).name,
-      originalName: file,
-      path: `clipper/reaction/${file}`,
-      type: /\.(mp4|mov|webm)$/i.test(file) ? "video" : "image",
-      uploadedAt: "",
-      url: reactionAssetUrl(project, `clipper/reaction/${file}`, path.join(reactionDir, file))
-    }));
+    .map((file, index) => {
+      const baseId = `legacy-${slugify(path.parse(file).name) || index + 1}`;
+      let id = baseId;
+      let suffix = 2;
+      while (usedIds.has(id)) id = `${baseId}-${suffix++}`;
+      usedIds.add(id);
+      return {
+        id,
+        name: path.parse(file).name,
+        originalName: file,
+        path: `clipper/reaction/${file}`,
+        type: /\.(mp4|mov|webm)$/i.test(file) ? "video" : "image",
+        uploadedAt: "",
+        url: reactionAssetUrl(project, `clipper/reaction/${file}`, path.join(reactionDir, file))
+      };
+    });
 
   return [...manifestCharacters, ...legacyCharacters];
 }
@@ -59,6 +67,8 @@ export async function renderClipperVariations({ project, projectDir, port, cwd, 
   const selectedPath = path.join(projectDir, "clipper", "generated", "selected-highlight.json");
   const selectedHighlight = fileExists(selectedPath) ? readJson(selectedPath) : null;
   if (!selectedHighlight) throw new Error("Make one highlight active before rendering character variations.");
+  const subtitlePlanPath = path.join(projectDir, "clipper", "generated", "clip-subtitle-plan.json");
+  const subtitlePlan = fileExists(subtitlePlanPath) ? readJson(subtitlePlanPath) : { subtitles: [] };
 
   const reactionMap = new Map(listClipperReactions(projectDir, project).map((reaction) => [reaction.id, reaction]));
   const selectedReactions = (Array.isArray(reactionIds) ? reactionIds : [])
@@ -78,7 +88,9 @@ export async function renderClipperVariations({ project, projectDir, port, cwd, 
         cwd,
         outputName,
         outputDir: "renders/clips",
-        reactionAsset
+        reactionAsset,
+        selectedHighlight: structuredClone(selectedHighlight),
+        subtitlePlan: structuredClone(subtitlePlan)
       });
       outputs.push({
         reactionId: reactionAsset.id,

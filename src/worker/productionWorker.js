@@ -78,10 +78,46 @@ async function recordRenders(project, result) {
   return outputUrl;
 }
 
-async function recordVariationRenders(project, result) {
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export async function deliverVariationOutputs({
+  project,
+  result,
+  projectPathFor = projectPath,
+  uploadFile = uploadSupabaseStorageFile,
+  persistRender = upsertSupabaseRenderJob
+}) {
   for (const output of result.outputs.filter((item) => item.status === "completed")) {
-    output.outputUrl = await recordRenders(project, { ...output, mode: result.mode });
+    let stage = "upload";
+    try {
+      const outputUrl = await uploadFile(
+        path.join(projectPathFor(project), output.output),
+        `projects/${project}/${output.output}`
+      );
+      if (!outputUrl) throw new Error("storage upload did not return a public URL");
+
+      stage = "persistence";
+      const persisted = await persistRender({
+        project,
+        projectType: result.mode || "worker",
+        name: output.output.replace(/^renders\//, ""),
+        status: "completed",
+        outputUrl
+      });
+      if (persisted?.skipped) throw new Error("render-row persistence was skipped");
+      output.outputUrl = outputUrl;
+    } catch (error) {
+      output.status = "failed";
+      output.error = `Delivery ${stage} failed: ${errorMessage(error)}`;
+      output.deliveryStage = stage;
+      delete output.outputUrl;
+    }
   }
+
+  result.completed = result.outputs.filter((item) => item.status === "completed").length;
+  result.failed = result.outputs.filter((item) => item.status === "failed").length;
   result.outputUrl = result.outputs.find((item) => item.status === "completed")?.outputUrl || "";
   return result;
 }
@@ -160,7 +196,7 @@ async function processJob(job) {
         cwd: rootDir,
         reactionIds: payload.reactionIds
       });
-      return recordVariationRenders(project, result);
+      return deliverVariationOutputs({ project, result });
     }
     case "pipeline":
       await analyzeProjectReference(project, payload.frames || 10);
@@ -170,23 +206,38 @@ async function processJob(job) {
   }
 }
 
-async function tick() {
-  const job = await claimNextSupabaseProductionJob();
+function resultOutputUrl(result) {
+  return result?.outputUrl
+    || result?.outputs?.find((output) => output.status === "completed")?.outputUrl
+    || result?.output
+    || result?.url
+    || "";
+}
+
+export async function runWorkerTick({
+  claimJob = claimNextSupabaseProductionJob,
+  updateJob = updateSupabaseProductionJob,
+  processJob: process = processJob
+} = {}) {
+  const job = await claimJob();
   if (!job) return false;
   console.log(`[worker] processing ${job.id} ${job.jobType} for ${job.projectName}`);
   try {
-    const result = await processJob(job);
-    await updateSupabaseProductionJob(job.id, {
-      status: "completed",
-      outputUrl: result?.outputUrl || result?.output || result?.url || ""
+    const result = await process(job);
+    const variationFailed = result?.mode === "clipper-character-variations" && result.failed > 0;
+    await updateJob(job.id, {
+      status: variationFailed ? "failed" : "completed",
+      outputUrl: resultOutputUrl(result),
+      error: variationFailed ? `${result.failed} variation output${result.failed === 1 ? "" : "s"} failed.` : "",
+      result
     });
-    console.log(`[worker] completed ${job.id}`);
+    console.log(`[worker] ${variationFailed ? "failed" : "completed"} ${job.id}`);
   } catch (error) {
-    await updateSupabaseProductionJob(job.id, {
+    await updateJob(job.id, {
       status: "failed",
-      error: error.message
+      error: errorMessage(error)
     });
-    console.error(`[worker] failed ${job.id}: ${error.message}`);
+    console.error(`[worker] failed ${job.id}: ${errorMessage(error)}`);
   }
   return true;
 }
@@ -194,7 +245,7 @@ async function tick() {
 export async function runWorker({ once = false } = {}) {
   console.log(`[worker] ContentFlow production worker started${once ? " (once)" : ""}`);
   do {
-    const processed = await tick();
+    const processed = await runWorkerTick();
     if (once) break;
     if (!processed) await new Promise((resolve) => setTimeout(resolve, pollMs));
   } while (true);

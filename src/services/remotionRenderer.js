@@ -134,17 +134,17 @@ export async function buildRemotionProps({ project, port }) {
   };
 }
 
-export async function buildClipperRemotionProps({ project, port, reactionAsset = null }) {
+export async function buildClipperRemotionProps({ project, port, reactionAsset = null, selectedHighlight = null, subtitlePlan = null, sourceMetadata = null }) {
   const projectDir = projectPath(project);
   const sourceVideoPath = path.join(projectDir, "clipper", "source", "source-video.mp4");
   const selectedPath = path.join(projectDir, "clipper", "generated", "selected-highlight.json");
   const subtitlePlanPath = path.join(projectDir, "clipper", "generated", "clip-subtitle-plan.json");
   if (!fileExists(sourceVideoPath)) throw new Error("Missing clipper source video. Download a source link first.");
-  if (!fileExists(selectedPath)) throw new Error("Select a highlight candidate before rendering.");
+  if (!selectedHighlight && !fileExists(selectedPath)) throw new Error("Select a highlight candidate before rendering.");
 
-  const metadata = await probeVideo(sourceVideoPath);
-  const selected = readJson(selectedPath);
-  const subtitlePlan = fileExists(subtitlePlanPath) ? readJson(subtitlePlanPath) : { subtitles: [] };
+  const metadata = sourceMetadata || await probeVideo(sourceVideoPath);
+  const selected = selectedHighlight || readJson(selectedPath);
+  const resolvedSubtitlePlan = subtitlePlan || (fileExists(subtitlePlanPath) ? readJson(subtitlePlanPath) : { subtitles: [] });
   const reactionDir = path.join(projectDir, "clipper", "reaction");
   const reactionPath = reactionAsset?.path || (fs.existsSync(reactionDir)
     ? fs.readdirSync(reactionDir)
@@ -179,7 +179,7 @@ export async function buildClipperRemotionProps({ project, port, reactionAsset =
       reactionName: reactionAsset?.name || "",
       title: selected.title || ""
     },
-    subtitles: subtitlePlan.subtitles || []
+    subtitles: resolvedSubtitlePlan.subtitles || []
   };
 }
 
@@ -234,14 +234,14 @@ function slugify(text) {
     .slice(0, 56) || "clip";
 }
 
-export async function renderClipperVideo({ project, port, cwd, outputName = "final-clip.mp4", outputDir = "renders", reactionAsset = null }) {
+export async function renderClipperVideo({ project, port, cwd, outputName = "final-clip.mp4", outputDir = "renders", reactionAsset = null, selectedHighlight = null, subtitlePlan = null }) {
   const projectDir = projectPath(project);
   const rendersDir = path.join(projectDir, outputDir);
   const generatedDir = path.join(projectDir, "clipper", "generated");
   ensureDir(rendersDir);
   ensureDir(generatedDir);
 
-  const props = await buildClipperRemotionProps({ project, port, reactionAsset });
+  const props = await buildClipperRemotionProps({ project, port, reactionAsset, selectedHighlight, subtitlePlan });
   const propsPath = path.join(generatedDir, "clipper-remotion-props.json");
   const outputPath = path.join(rendersDir, outputName);
   writeJson(propsPath, props);
