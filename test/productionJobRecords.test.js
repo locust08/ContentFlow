@@ -6,6 +6,13 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
+function restoreEnvironment(previous) {
+  for (const [key, value] of Object.entries(previous)) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+}
+
 test("schema stores production progress, results, and worker heartbeats", () => {
   const schema = fs.readFileSync(path.join(root, "supabase", "schema.sql"), "utf8");
   assert.match(schema, /attempt_count integer not null default 0/i);
@@ -39,9 +46,9 @@ test("validates worker update targets and normalizes progress milestones", async
 test("hosted updates target processing jobs and ignore caller heartbeat start times", async () => {
   const db = await import("../src/services/supabaseDb.js");
   const previous = {
-    hosted: process.env.HOSTED_DEMO,
-    url: process.env.SUPABASE_URL,
-    key: process.env.SUPABASE_SERVICE_ROLE_KEY
+    HOSTED_DEMO: process.env.HOSTED_DEMO,
+    SUPABASE_URL: process.env.SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY
   };
   const originalFetch = global.fetch;
   const requests = [];
@@ -67,8 +74,41 @@ test("hosted updates target processing jobs and ignore caller heartbeat start ti
     assert.equal(Object.hasOwn(JSON.parse(requests[1].options.body), "started_at"), false);
   } finally {
     global.fetch = originalFetch;
-    process.env.HOSTED_DEMO = previous.hosted;
-    process.env.SUPABASE_URL = previous.url;
-    process.env.SUPABASE_SERVICE_ROLE_KEY = previous.key;
+    restoreEnvironment(previous);
+  }
+});
+
+test("hosted claims compare the queued attempt count and return null after a stale patch", async () => {
+  const db = await import("../src/services/supabaseDb.js");
+  const previous = {
+    HOSTED_DEMO: process.env.HOSTED_DEMO,
+    SUPABASE_URL: process.env.SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY
+  };
+  const originalFetch = global.fetch;
+  const requests = [];
+
+  process.env.HOSTED_DEMO = "true";
+  process.env.SUPABASE_URL = "https://project.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-test";
+  global.fetch = async (url, options) => {
+    requests.push({ url: String(url), options });
+    const requestUrl = new URL(url);
+    const isClaimLookup = options.method === "GET" && requestUrl.searchParams.get("status") === "eq.queued";
+    return new Response(JSON.stringify(isClaimLookup ? [{ id: "job-1", attempt_count: 3 }] : []), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    });
+  };
+
+  try {
+    assert.equal(await db.claimNextSupabaseProductionJob(), null);
+    const patchUrl = new URL(requests[1].url);
+    assert.equal(patchUrl.searchParams.get("id"), "eq.job-1");
+    assert.equal(patchUrl.searchParams.get("status"), "eq.queued");
+    assert.equal(patchUrl.searchParams.get("attempt_count"), "eq.3");
+  } finally {
+    global.fetch = originalFetch;
+    restoreEnvironment(previous);
   }
 });

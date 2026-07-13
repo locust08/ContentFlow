@@ -911,12 +911,13 @@ export async function claimNextSupabaseProductionJob() {
   if (hostedRestMode()) {
     const [candidate] = await restTable("cf_production_jobs", "select=*&status=eq.queued&order=created_at.asc&limit=1");
     if (!candidate) return null;
-    const [row] = await restRequest(`cf_production_jobs?id=eq.${eq(candidate.id)}&status=eq.queued`, {
+    const priorAttemptCount = Number(candidate.attempt_count || 0);
+    const [row] = await restRequest(`cf_production_jobs?id=eq.${eq(candidate.id)}&status=eq.queued&attempt_count=eq.${eq(priorAttemptCount)}`, {
       method: "PATCH",
       headers: { Prefer: "return=representation" },
       body: {
         status: "processing",
-        attempt_count: Number(candidate.attempt_count || 0) + 1,
+        attempt_count: priorAttemptCount + 1,
         started_at: new Date().toISOString(),
         completed_at: null,
         cancelled_at: null,
