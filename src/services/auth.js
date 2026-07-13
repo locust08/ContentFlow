@@ -78,6 +78,18 @@ async function profileFromAuthUser(authUser) {
     };
   }
 
+  if (hostedDemoMode()) {
+    return {
+      id: authUser.user_metadata?.staff_id || authUser.user_metadata?.id || authUser.id,
+      authUserId: authUser.id,
+      email: authUser.email,
+      name: authUser.user_metadata?.name || authUser.email,
+      role: normalizeRole(authUser.user_metadata?.role),
+      clientId: authUser.user_metadata?.client_id || authUser.user_metadata?.clientId || "",
+      source: "auth-metadata"
+    };
+  }
+
   const organization = readOrganization();
   const email = String(authUser.email || "").toLowerCase();
   const staff = organization.staff.find((person) => String(person.email || "").toLowerCase() === email);
