@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { renderClipperVideo } from "./remotionRenderer.js";
+import { selectClipperHighlight } from "./clipperService.js";
 import { ensureDir, fileExists, readJson, writeJson } from "../utils/files.js";
 
 function slugify(text) {
@@ -17,6 +18,47 @@ function reactionManifestPath(projectDir) {
 
 function reactionAssetUrl(project, localPath, absolutePath) {
   return `/media/${encodeURIComponent(project)}/${localPath.split("/").map(encodeURIComponent).join("/")}?v=${fs.statSync(absolutePath).mtimeMs}`;
+}
+
+async function materializeHostedReactions({ projectDir, reactionAssets, fetchImpl }) {
+  const references = Array.isArray(reactionAssets) ? reactionAssets : [];
+  if (!references.length) return;
+  const manifestPath = reactionManifestPath(projectDir);
+  const manifest = fileExists(manifestPath) ? readJson(manifestPath) : { characters: [] };
+  const characters = Array.isArray(manifest.characters) ? [...manifest.characters] : [];
+  const knownIds = new Set(characters.map((character) => character.id));
+  const reactionDir = path.join(projectDir, "clipper", "reaction");
+  ensureDir(reactionDir);
+
+  for (const reference of references) {
+    if (!reference?.id || knownIds.has(reference.id)) continue;
+    const requestedName = path.basename(reference.localPath || new URL(reference.url).pathname || `${slugify(reference.id)}.bin`);
+    const extension = path.extname(requestedName).toLowerCase();
+    if (!/^\.(png|jpg|jpeg|webp|mp4|mov|webm)$/.test(extension)) throw new Error(`Unsupported hosted reaction type for ${reference.name || reference.id}.`);
+    const localName = `hosted-${slugify(reference.id)}${extension}`;
+    const localPath = `clipper/reaction/${localName}`;
+    const absolutePath = path.join(reactionDir, localName);
+    if (!fileExists(absolutePath)) {
+      if (!/^https?:\/\//i.test(reference.url || "")) throw new Error(`Hosted reaction ${reference.name || reference.id} has no downloadable URL.`);
+      const response = await fetchImpl(reference.url);
+      if (!response.ok) throw new Error(`Could not download hosted reaction ${reference.name || reference.id} (${response.status}).`);
+      const bytes = Buffer.from(await response.arrayBuffer());
+      if (bytes.length > 100 * 1024 * 1024) throw new Error(`Hosted reaction ${reference.name || reference.id} exceeds 100 MB.`);
+      fs.writeFileSync(absolutePath, bytes);
+    }
+    characters.push({
+      id: reference.id,
+      name: reference.name || path.parse(localName).name,
+      originalName: requestedName,
+      path: localPath,
+      type: /\.(mp4|mov|webm)$/i.test(extension) ? "video" : "image",
+      uploadedAt: new Date().toISOString()
+    });
+    knownIds.add(reference.id);
+  }
+
+  ensureDir(path.dirname(manifestPath));
+  writeJson(manifestPath, { ...manifest, characters });
 }
 
 export function listClipperReactions(projectDir, project) {
@@ -63,13 +105,25 @@ export function listClipperReactions(projectDir, project) {
   return [...manifestCharacters, ...legacyCharacters];
 }
 
-export async function renderClipperVariations({ project, projectDir, port, cwd, reactionIds, renderClip = renderClipperVideo }) {
+export async function renderClipperVariations({
+  project,
+  projectDir,
+  port,
+  cwd,
+  highlightId = "",
+  reactionIds,
+  reactionAssets = [],
+  fetchImpl = globalThis.fetch,
+  renderClip = renderClipperVideo
+}) {
   const selectedPath = path.join(projectDir, "clipper", "generated", "selected-highlight.json");
+  if (highlightId) selectClipperHighlight({ projectDir, highlightId });
   const selectedHighlight = fileExists(selectedPath) ? readJson(selectedPath) : null;
   if (!selectedHighlight) throw new Error("Make one highlight active before rendering character variations.");
   const subtitlePlanPath = path.join(projectDir, "clipper", "generated", "clip-subtitle-plan.json");
   const subtitlePlan = fileExists(subtitlePlanPath) ? readJson(subtitlePlanPath) : { subtitles: [] };
 
+  await materializeHostedReactions({ projectDir, reactionAssets, fetchImpl });
   const reactionMap = new Map(listClipperReactions(projectDir, project).map((reaction) => [reaction.id, reaction]));
   const selectedReactions = (Array.isArray(reactionIds) ? reactionIds : [])
     .map((reactionId) => reactionMap.get(reactionId))

@@ -69,6 +69,37 @@ function sendJson(res, status, body) {
   send(res, status, body, { "Content-Type": "application/json; charset=utf-8" });
 }
 
+const productionSecretKey = /(api[-_]?key|token|authorization|secret|password|credential|cookie)/i;
+
+function redactProductionValue(value, key = "") {
+  if (productionSecretKey.test(key)) return "[REDACTED]";
+  if (Array.isArray(value)) return value.map((item) => redactProductionValue(item));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([entryKey, entryValue]) => [entryKey, redactProductionValue(entryValue, entryKey)]));
+  }
+  if (typeof value !== "string") return value;
+  return value
+    .replace(/(bearer\s+)[a-z0-9._~+/=-]+/gi, "$1[REDACTED]")
+    .replace(/((?:api[-_]?key|token|authorization|secret|password|credential|cookie)\s*[:=]\s*)[^\s,;}]+/gi, "$1[REDACTED]");
+}
+
+function productionJobResponse(job, { admin = false } = {}) {
+  const safe = {
+    ...job,
+    error: redactProductionValue(job?.error || "")
+  };
+  if (!admin) {
+    delete safe.payload;
+    delete safe.result;
+    delete safe.requestedBy;
+    if (safe.error) safe.error = "Production job failed. Ask an administrator for details.";
+    return safe;
+  }
+  safe.payload = redactProductionValue(job?.payload || {});
+  safe.result = redactProductionValue(job?.result || {});
+  return safe;
+}
+
 function readBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -355,9 +386,9 @@ function mediaLibrary() {
 
 function listProjectAssets(projectDir, project) {
   const assets = [];
-  const pushAsset = ({ kind, name, localPath, url, mediaType }) => {
+  const pushAsset = ({ id = "", kind, name, localPath, url, mediaType }) => {
     assets.push({
-      id: `${project}:${kind}:${name}`,
+      id: `${project}:${kind}:${id || name}`,
       kind,
       name,
       localPath,
@@ -373,7 +404,7 @@ function listProjectAssets(projectDir, project) {
   }
   for (const item of listProductImages(projectDir, project)) pushAsset({ kind: "product-image", name: item.name, localPath: `product/${item.name}`, url: item.url, mediaType: "image" });
   for (const item of listCharacterImages(projectDir, project)) pushAsset({ kind: "character-reference", name: item.name, localPath: `character/${item.name}`, url: item.url, mediaType: "image" });
-  for (const item of listClipperReactions(projectDir, project)) pushAsset({ kind: "reaction-character", name: item.name, localPath: item.path, url: item.url, mediaType: item.type });
+  for (const item of listClipperReactions(projectDir, project)) pushAsset({ id: item.id, kind: "reaction-character", name: item.name, localPath: item.path, url: item.url, mediaType: item.type });
   return assets;
 }
 
@@ -572,7 +603,7 @@ async function handleApi(req, res, url) {
   const operationalWorkers = async () => Promise.all((await listSupabaseWorkerHeartbeats()).map(async (worker) => {
     const health = workerHealth(worker);
     if (health.status === "offline" && worker.status !== "offline") {
-      const updated = await setSupabaseWorkerHeartbeatStatus(worker.workerId, "offline");
+      const updated = await setSupabaseWorkerHeartbeatStatus(worker.workerId, "offline", worker.lastSeenAt);
       if (updated) {
         await recordSupabaseActivityEvent({
           eventType: "production.worker.offline",
@@ -599,7 +630,7 @@ async function handleApi(req, res, url) {
       requestedBy: requestUser?.id || "local"
     });
     const created = await createSupabaseProductionJob(job);
-    recordActivity("production.queued", projectName, `${jobType} queued`, { jobId: created?.id || "", jobType });
+    recordActivity("production.job.queued", projectName, `${jobType} queued`, { jobId: created?.id || "", jobType });
     const data = hostedDemoMode() ? await supabaseProjectData(projectName) : projectData(projectName);
     return { ok: true, queued: true, job: created, project: summary, data };
   };
@@ -687,7 +718,8 @@ async function handleApi(req, res, url) {
 
       if (req.method === "GET" && parts.length === 4 && parts[3] === "jobs") {
         await requireHostedProjectJobAccess(project);
-        return sendJson(res, 200, { jobs: await listSupabaseProductionJobs({ projectName: project }) });
+        const jobs = await listSupabaseProductionJobs({ projectName: project });
+        return sendJson(res, 200, { jobs: jobs.map((job) => productionJobResponse(job, { admin: isAdmin })) });
       }
 
       if (req.method === "POST" && parts.length === 4 && parts[3] === "jobs") {
@@ -772,11 +804,33 @@ async function handleApi(req, res, url) {
         if (jobType) {
           await requireHostedEditorAccess(project);
           const body = await readJsonBody(req);
+          if (jobType === "clipper-render-variations") {
+            const data = await supabaseProjectData(project);
+            const highlightId = data?.summary?.selectedHighlightId || body.highlightId || "";
+            if (!highlightId) throw new Error("Make one highlight active before rendering character variations.");
+            const requestedReactionIds = Array.isArray(body.reactionIds) ? body.reactionIds : [];
+            const reactionAssets = (data?.clipper?.reactions || [])
+              .filter((reaction) => requestedReactionIds.includes(reaction.id))
+              .map((reaction) => ({
+                id: reaction.id,
+                name: reaction.name,
+                localPath: reaction.localPath || "",
+                url: reaction.url || "",
+                mediaType: reaction.mediaType || reaction.type || ""
+              }));
+            if (reactionAssets.length !== requestedReactionIds.length) throw new Error("One or more selected reaction characters are no longer available.");
+            return sendJson(res, 202, await createQueuedJob(project, jobType, { ...body, highlightId, reactionAssets }));
+          }
           return sendJson(res, 202, await createQueuedJob(project, jobType, body));
         }
         if (parts[4] === "select-highlight") {
-          await requireHostedEditorAccess(project);
-          return sendJson(res, 200, { ok: true, data: await supabaseProjectData(project) });
+          const summary = await requireHostedEditorAccess(project);
+          const body = await readJsonBody(req);
+          const data = await supabaseProjectData(project);
+          const selected = (data?.summary?.clipCandidates || []).find((candidate) => candidate.id === body.highlightId);
+          if (!selected) throw new Error("Selected highlight was not found.");
+          await upsertSupabaseProject({ ...summary, selectedHighlightId: selected.id });
+          return sendJson(res, 200, { ok: true, result: { selected }, data: await supabaseProjectData(project) });
         }
       }
     }
@@ -836,7 +890,7 @@ async function handleApi(req, res, url) {
     const jobType = url.searchParams.get("jobType") || "";
     const jobs = await listSupabaseProductionJobs({ projectName, status, jobType });
     const workers = await operationalWorkers();
-    return sendJson(res, 200, { jobs, summary: productionJobSummary(jobs), workers });
+    return sendJson(res, 200, { jobs: jobs.map((job) => productionJobResponse(job, { admin: true })), summary: productionJobSummary(jobs), workers });
   }
 
   if (req.method === "GET" && url.pathname === "/api/production-workers") {
@@ -948,7 +1002,8 @@ async function handleApi(req, res, url) {
 
     if (req.method === "GET" && parts.length === 4 && parts[3] === "jobs") {
       requireProjectJobAccess(project);
-      return sendJson(res, 200, { jobs: await listSupabaseProductionJobs({ projectName: project }) });
+      const jobs = await listSupabaseProductionJobs({ projectName: project });
+      return sendJson(res, 200, { jobs: jobs.map((job) => productionJobResponse(job, { admin: isAdmin })) });
     }
 
     if (req.method === "POST" && parts.length === 4 && parts[3] === "jobs") {
@@ -1146,7 +1201,9 @@ async function handleApi(req, res, url) {
       requireEditorAccess(project);
       const body = await readJsonBody(req);
       const result = selectClipperHighlight({ projectDir: safeProject(project), highlightId: body.highlightId });
-      return sendJson(res, 200, { ok: true, result, data: projectData(project) });
+      const summary = getProjectSummary(project);
+      const supabaseWarning = await trySupabaseWrite(() => upsertSupabaseProject({ ...summary, selectedHighlightId: result.selected.id }));
+      return sendJson(res, 200, { ok: true, result, data: projectData(project), supabaseWarning });
     }
 
     if (parts[3] === "clipper" && req.method === "POST" && parts[4] === "render") {
@@ -1166,6 +1223,7 @@ async function handleApi(req, res, url) {
         projectDir: safeProject(project),
         port,
         cwd: rootDir,
+        highlightId: body.highlightId,
         reactionIds: body.reactionIds
       });
       const supabaseWarning = await trySupabaseWrite(() => syncProjectRendersToSupabase(project));

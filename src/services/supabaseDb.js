@@ -178,6 +178,7 @@ export async function upsertSupabaseProject(project) {
         priority: project.priority || "normal",
         approval_status: project.approvalStatus || "draft",
         approval_feedback: project.approvalFeedback || null,
+        selected_highlight_id: project.selectedHighlightId || null,
         local_path: `projects/${project.name}`,
         created_at: safeDate(project.createdAt),
         updated_at: new Date().toISOString()
@@ -189,9 +190,9 @@ export async function upsertSupabaseProject(project) {
   await getPool().query(`
     insert into cf_projects (
       name, type, folder_id, client_id, campaign_id, assigned_staff_id, reviewer_id,
-      priority, approval_status, approval_feedback, local_path, created_at, updated_at
+      priority, approval_status, approval_feedback, selected_highlight_id, local_path, created_at, updated_at
     )
-    values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now())
+    values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, now())
     on conflict (name) do update set
       type = excluded.type,
       folder_id = excluded.folder_id,
@@ -202,6 +203,7 @@ export async function upsertSupabaseProject(project) {
       priority = excluded.priority,
       approval_status = excluded.approval_status,
       approval_feedback = excluded.approval_feedback,
+      selected_highlight_id = excluded.selected_highlight_id,
       local_path = excluded.local_path,
       updated_at = now()
   `, [
@@ -215,6 +217,7 @@ export async function upsertSupabaseProject(project) {
     project.priority || "normal",
     project.approvalStatus || "draft",
     project.approvalFeedback || null,
+    project.selectedHighlightId || null,
     `projects/${project.name}`,
     safeDate(project.createdAt)
   ]);
@@ -243,6 +246,7 @@ function mapProjectSummary(row) {
     priority: row.priority || "normal",
     approvalStatus: row.approval_status || "draft",
     approvalFeedback: row.approval_feedback || "",
+    selectedHighlightId: row.selected_highlight_id || "",
     reviewSubmittedAt: "",
     reviewedAt: "",
     hasReference: Number(row.reference_count || 0) > 0,
@@ -262,7 +266,7 @@ function mapProjectSummary(row) {
     hasClipperSource: Number(row.clipper_source_count || 0) > 0,
     hasClipperTranscript: false,
     hasClipperHighlights: Number(row.clip_candidate_count || 0) > 0,
-    hasClipperSelection: false,
+    hasClipperSelection: Boolean(row.selected_highlight_id),
     hasClipperReaction: Number(row.reaction_count || 0) > 0,
     hasClipperRender: Number(row.clip_render_count || 0) > 0,
     assets: [],
@@ -485,10 +489,13 @@ function buildSupabaseProjectData({ summary, organization, assets, renders, cand
   }));
   const products = assetItems.filter((item) => item.kind === "product-image");
   const characters = assetItems.filter((item) => item.kind === "character-reference");
+  const reactionPrefix = `${summary.name}:reaction-character:`;
   const reactions = assetItems.filter((item) => item.kind === "reaction-character").map((item) => ({
     ...item,
+    id: String(item.id).startsWith(reactionPrefix) ? String(item.id).slice(reactionPrefix.length) : item.id,
     type: item.mediaType === "video" ? "video" : "image"
   }));
+  const selectedHighlight = clipCandidates.find((candidate) => candidate.id === summary.selectedHighlightId) || null;
   const videos = assetItems
     .filter((item) => item.mediaType === "video" && item.kind !== "reference-video" && item.kind !== "clipper-source" && item.url)
     .map((item) => ({ name: item.name, url: item.url }));
@@ -513,7 +520,8 @@ function buildSupabaseProjectData({ summary, organization, assets, renders, cand
     },
     referenceUrl: assetItems.find((item) => item.kind === "reference-video")?.url || null,
     files: {
-      clipperHighlights: clipCandidates.length ? { candidates: clipCandidates } : null
+      clipperHighlights: clipCandidates.length ? { candidates: clipCandidates } : null,
+      clipperSelection: selectedHighlight
     }
   };
 }
@@ -935,7 +943,17 @@ export async function claimNextSupabaseProductionJob() {
         updated_at: new Date().toISOString()
       }
     });
-    return mapProductionJobRecord(row);
+    const job = mapProductionJobRecord(row);
+    if (job) {
+      await recordSupabaseActivityEvent({
+        eventType: "production.job.claimed",
+        projectName: job.projectName,
+        actor: { id: "production-worker", name: "ContentFlow production worker", role: "system" },
+        summary: `${job.jobType} claimed by a production worker`,
+        metadata: { jobId: job.id, jobType: job.jobType, attemptCount: job.attemptCount }
+      });
+    }
+    return job;
   }
   if (!await ensureSupabaseReady()) return null;
   const result = await getPool().query(`
@@ -961,7 +979,17 @@ export async function claimNextSupabaseProductionJob() {
     )
     returning *
   `);
-  return mapProductionJobRecord(result.rows[0]);
+  const job = mapProductionJobRecord(result.rows[0]);
+  if (job) {
+    await recordSupabaseActivityEvent({
+      eventType: "production.job.claimed",
+      projectName: job.projectName,
+      actor: { id: "production-worker", name: "ContentFlow production worker", role: "system" },
+      summary: `${job.jobType} claimed by a production worker`,
+      metadata: { jobId: job.id, jobType: job.jobType, attemptCount: job.attemptCount }
+    });
+  }
+  return job;
 }
 
 export async function updateSupabaseProductionJob(id, patch = {}) {
@@ -1001,12 +1029,15 @@ export async function updateSupabaseProductionJob(id, patch = {}) {
     job = mapProductionJobRecord(result.rows[0]);
   }
   if (job && (status === "completed" || status === "failed")) {
-    void recordSupabaseActivityEvent({
-      eventType: `production.${status}`,
+    const startedAt = Date.parse(job.startedAt || "");
+    const completedAt = Date.parse(job.completedAt || "");
+    const durationMs = Number.isFinite(startedAt) && Number.isFinite(completedAt) ? Math.max(0, completedAt - startedAt) : 0;
+    await recordSupabaseActivityEvent({
+      eventType: `production.job.${status}`,
       projectName: job.projectName,
       actor: { id: "production-worker", name: "ContentFlow production worker", role: "system" },
       summary: status === "completed" ? `${job.jobType} completed` : `${job.jobType} failed`,
-      metadata: { jobId: job.id, jobType: job.jobType, outputUrl: job.outputUrl, error: job.error }
+      metadata: { jobId: job.id, jobType: job.jobType, attemptCount: job.attemptCount, durationMs, outputUrl: job.outputUrl }
     });
   }
   return job;
@@ -1142,10 +1173,11 @@ export async function listSupabaseWorkerHeartbeats() {
   return result.rows.map(mapWorkerHeartbeatRecord);
 }
 
-export async function setSupabaseWorkerHeartbeatStatus(workerId, status) {
+export async function setSupabaseWorkerHeartbeatStatus(workerId, status, observedLastSeenAt) {
   if (!workerId) throw new Error("Worker id is required.");
+  if (!observedLastSeenAt) throw new Error("Observed worker heartbeat time is required.");
   if (hostedRestMode()) {
-    const [row] = await restRequest(`cf_worker_heartbeats?worker_id=eq.${eq(workerId)}&status=neq.${eq(status)}`, {
+    const [row] = await restRequest(`cf_worker_heartbeats?worker_id=eq.${eq(workerId)}&status=neq.${eq(status)}&last_seen_at=eq.${eq(observedLastSeenAt)}`, {
       method: "PATCH",
       headers: { Prefer: "return=representation" },
       body: { status, updated_at: new Date().toISOString() }
@@ -1156,9 +1188,11 @@ export async function setSupabaseWorkerHeartbeatStatus(workerId, status) {
   const result = await getPool().query(`
     update cf_worker_heartbeats
     set status = $2, updated_at = now()
-    where worker_id = $1 and status is distinct from $2
+    where worker_id = $1
+      and status is distinct from $2
+      and last_seen_at = $3::timestamptz
     returning *
-  `, [workerId, status]);
+  `, [workerId, status, observedLastSeenAt]);
   return mapWorkerHeartbeatRecord(result.rows[0]);
 }
 

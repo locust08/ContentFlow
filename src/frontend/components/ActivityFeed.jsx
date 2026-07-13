@@ -7,8 +7,13 @@ const eventIcons = {
   "project.assigned": FolderKanban,
   "asset.uploaded": FileUp,
   "production.queued": Sparkles,
+  "production.job.queued": Sparkles,
+  "production.job.claimed": Sparkles,
   "production.completed": CheckCircle2,
+  "production.job.completed": CheckCircle2,
   "production.failed": AlertCircle,
+  "production.job.failed": AlertCircle,
+  "production.worker.online": CheckCircle2,
   "approval.submitted": MessageSquareText,
   "approval.approved": CheckCircle2,
   "approval.changes_requested": MessageSquareText

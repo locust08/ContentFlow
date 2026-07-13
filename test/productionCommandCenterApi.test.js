@@ -29,7 +29,17 @@ async function withCommandCenter(run) {
   const events = [];
   const requests = [];
   const jobs = [
-    { id: "failed-job", project_name: "staff-project", job_type: "pipeline", status: "failed", attempt_count: 1 },
+    {
+      id: "failed-job",
+      project_name: "staff-project",
+      job_type: "pipeline",
+      status: "failed",
+      attempt_count: 1,
+      requested_by: "admin-user",
+      payload: { topic: "Launch", apiKey: "secret-payload-key" },
+      result: { provider: "libtv", authorization: "Bearer secret-result-token" },
+      error: "Provider failed with api_key=secret-error-key"
+    },
     { id: "queued-job", project_name: "staff-project", job_type: "render-final-video", status: "queued", attempt_count: 0 },
     { id: "other-job", project_name: "other-project", job_type: "pipeline", status: "completed", attempt_count: 1 }
   ];
@@ -50,6 +60,23 @@ async function withCommandCenter(run) {
     { name: "staff-project", assigned_staff_id: "staff", client_id: "client-a" },
     { name: "other-project", assigned_staff_id: "other", client_id: "other-client" }
   ];
+  const assets = [{
+    id: "staff-project:reaction-character:r-1",
+    project_name: "staff-project",
+    kind: "reaction-character",
+    name: "Maya",
+    media_type: "image",
+    local_path: "clipper/reaction/maya.png",
+    url: "https://media.example.test/maya.png"
+  }];
+  const clipCandidates = [{
+    id: "staff-project:highlight-1",
+    project_name: "staff-project",
+    title: "Hosted highlight",
+    start_seconds: 4,
+    end_seconds: 34,
+    score: 0.9
+  }];
 
   process.env.HOSTED_DEMO = "true";
   process.env.REQUIRE_AUTH = "true";
@@ -74,8 +101,24 @@ async function withCommandCenter(run) {
       const profile = Object.values(profiles).find((candidate) => encodedAuthId.includes(candidate.auth_user_id));
       return json(profile ? [profile] : []);
     }
-    if (table === "cf_projects") return json(projects);
+    if (table === "cf_projects") {
+      if (options.method === "POST") {
+        const body = JSON.parse(options.body);
+        const current = projects.find((project) => project.name === body.name);
+        Object.assign(current, body);
+        return json([current]);
+      }
+      return json(projects);
+    }
+    if (table === "cf_assets") return json(assets);
+    if (table === "cf_render_jobs") return json([]);
+    if (table === "cf_clip_candidates") return json(clipCandidates);
     if (table === "cf_production_jobs") {
+      if (options.method === "POST") {
+        const created = { id: `created-${jobs.length + 1}`, attempt_count: 0, progress: 0, result: {}, ...JSON.parse(options.body) };
+        jobs.push(created);
+        return json([created]);
+      }
       if (options.method === "PATCH") {
         const target = jobs.find((job) => job.id === (url.searchParams.get("id") || "").replace("eq.", ""));
         if (!target) return json([]);
@@ -142,6 +185,8 @@ test("admin command center forwards filters and persists each offline worker eve
     assert.ok(Array.isArray(body.workers));
     assert.equal(body.workers[0].health.status, "offline");
     assert.equal(workers[0].status, "offline");
+    const offlineRequest = requests.find(({ url, options }) => url.pathname.endsWith("/cf_worker_heartbeats") && options.method === "PATCH");
+    assert.equal(offlineRequest.url.searchParams.get("last_seen_at"), "eq.2000-01-01T00:00:00.000Z");
     assert.deepEqual(events.map((event) => event.event_type), ["production.worker.offline"]);
 
     const refresh = await fetch(`${baseUrl}/api/production-workers`, { headers: auth("admin-auth") });
@@ -200,6 +245,11 @@ test("production command center is admin-only and staff job visibility stays pro
 
     const staffProjectJobs = await fetch(`${baseUrl}/api/projects/staff-project/jobs`, { headers: auth("staff-auth") });
     assert.equal(staffProjectJobs.status, 200);
+    const staffBody = await staffProjectJobs.json();
+    assert.equal(Object.hasOwn(staffBody.jobs[0], "payload"), false);
+    assert.equal(Object.hasOwn(staffBody.jobs[0], "result"), false);
+    assert.equal(Object.hasOwn(staffBody.jobs[0], "requestedBy"), false);
+    assert.doesNotMatch(JSON.stringify(staffBody), /secret-payload-key|secret-result-token|secret-error-key/);
 
     const otherProjectJobs = await fetch(`${baseUrl}/api/projects/other-project/jobs`, { headers: auth("staff-auth") });
     assert.equal(otherProjectJobs.status, 403);
@@ -224,6 +274,37 @@ test("production command center rejects trailing route segments", async () => {
     });
     assert.equal(projectJobPost.status, 404);
     assert.equal(requests.filter(({ url, options }) => url.pathname.endsWith("/cf_production_jobs") && options.method === "POST").length, 0);
+  });
+});
+
+test("hosted clipper selection persists and variation jobs carry stable references", async () => {
+  await withCommandCenter(async ({ baseUrl, auth, events }) => {
+    const selected = await fetch(`${baseUrl}/api/projects/staff-project/clipper/select-highlight`, {
+      method: "POST",
+      headers: { ...auth("staff-auth"), "Content-Type": "application/json" },
+      body: JSON.stringify({ highlightId: "highlight-1" })
+    });
+    assert.equal(selected.status, 200);
+    const selectedBody = await selected.json();
+    assert.equal(selectedBody.data.summary.selectedHighlightId, "highlight-1");
+    assert.equal(selectedBody.data.files.clipperSelection.id, "highlight-1");
+
+    const queued = await fetch(`${baseUrl}/api/projects/staff-project/clipper/render-variations`, {
+      method: "POST",
+      headers: { ...auth("staff-auth"), "Content-Type": "application/json" },
+      body: JSON.stringify({ reactionIds: ["r-1"] })
+    });
+    assert.equal(queued.status, 202);
+    const queuedBody = await queued.json();
+    assert.equal(queuedBody.job.payload.highlightId, "highlight-1");
+    assert.deepEqual(queuedBody.job.payload.reactionAssets, [{
+      id: "r-1",
+      name: "Maya",
+      localPath: "clipper/reaction/maya.png",
+      url: "https://media.example.test/maya.png",
+      mediaType: "image"
+    }]);
+    assert.equal(events.some((event) => event.event_type === "production.job.queued"), true);
   });
 });
 

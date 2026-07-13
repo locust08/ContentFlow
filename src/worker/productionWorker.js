@@ -14,6 +14,7 @@ import { renderClipperVariations } from "../services/clipperVariations.js";
 import {
   claimNextSupabaseProductionJob,
   normalizeProductionJobProgress,
+  recordSupabaseActivityEvent,
   updateSupabaseProductionJob,
   upsertSupabaseWorkerHeartbeat,
   uploadSupabaseStorageFile,
@@ -200,7 +201,9 @@ async function processJob(job) {
         projectDir,
         port,
         cwd: rootDir,
-        reactionIds: payload.reactionIds
+        highlightId: payload.highlightId,
+        reactionIds: payload.reactionIds,
+        reactionAssets: payload.reactionAssets
       });
       return deliverVariationOutputs({ project, result });
     }
@@ -260,13 +263,30 @@ export function createProductionWorker({
   now = () => new Date(),
   setIntervalFn = setInterval,
   clearIntervalFn = clearInterval,
-  heartbeatMs = 5000
+  heartbeatMs = 5000,
+  heartbeatAttempts = 3,
+  heartbeatRetryMs = 250,
+  sleepFn = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
 } = {}) {
   let currentJobId = "";
   let heartbeatTimer = null;
   let heartbeatTail = Promise.resolve();
   let startPromise = null;
   let lifecycleVersion = 0;
+
+  async function persistHeartbeat(record) {
+    let lastError;
+    const attempts = Math.max(1, Number(heartbeatAttempts) || 1);
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      try {
+        return await updateHeartbeat(record);
+      } catch (error) {
+        lastError = error;
+        if (attempt < attempts) await sleepFn(Math.max(0, Number(heartbeatRetryMs) || 0) * attempt);
+      }
+    }
+    throw lastError;
+  }
 
   function heartbeat() {
     const heartbeatRecord = {
@@ -279,17 +299,25 @@ export function createProductionWorker({
       lastSeenAt: now().toISOString()
     };
     const write = heartbeatTail.then(
-      () => updateHeartbeat(heartbeatRecord),
-      () => updateHeartbeat(heartbeatRecord)
+      () => persistHeartbeat(heartbeatRecord),
+      () => persistHeartbeat(heartbeatRecord)
     );
     heartbeatTail = write.catch(() => {});
     return write;
   }
 
+  async function safeHeartbeat() {
+    try {
+      return await heartbeat();
+    } catch {
+      return null;
+    }
+  }
+
   async function tick() {
     const job = await claimJob();
     if (!job) {
-      await heartbeat();
+      await safeHeartbeat();
       return false;
     }
 
@@ -302,7 +330,7 @@ export function createProductionWorker({
       if (Number.isFinite(patch.progress)) lastPersistedProgress = patch.progress;
     };
     try {
-      await heartbeat();
+      await safeHeartbeat();
       await persistMilestone({
         status: "processing",
         progress: 25,
@@ -350,7 +378,7 @@ export function createProductionWorker({
       return true;
     } finally {
       currentJobId = "";
-      await heartbeat();
+      await safeHeartbeat();
     }
   }
 
@@ -360,10 +388,10 @@ export function createProductionWorker({
 
     const startVersion = lifecycleVersion;
     const startup = (async () => {
-      await heartbeat();
+      await safeHeartbeat();
       if (startVersion !== lifecycleVersion || heartbeatTimer !== null) return;
       heartbeatTimer = setIntervalFn(() => {
-        void heartbeat().catch(() => {});
+        void safeHeartbeat();
       }, heartbeatMs);
     })();
     startPromise = startup;
@@ -392,15 +420,43 @@ export function createProductionWorker({
   });
 }
 
-export async function runWorker({ once = false, worker, ...dependencies } = {}) {
+export async function runWorker({
+  once = false,
+  worker,
+  recordActivity = recordSupabaseActivityEvent,
+  pollSleepFn = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+  ...dependencies
+} = {}) {
   const runtime = worker || createProductionWorker(dependencies);
   console.log(`[worker] ContentFlow production worker started${once ? " (once)" : ""}`);
+  try {
+    await recordActivity({
+      eventType: "production.worker.online",
+      projectName: "",
+      actor: { id: runtime.workerId, name: runtime.workerName, role: "system" },
+      summary: `${runtime.workerName || runtime.workerId} is online`,
+      metadata: {
+        workerId: runtime.workerId,
+        workerName: runtime.workerName,
+        hostname: runtime.hostname,
+        capabilities: runtime.capabilities
+      }
+    });
+  } catch {
+    // Audit availability must not stop the production worker.
+  }
   await runtime.start();
   try {
     do {
-      const processed = await runtime.tick();
+      let processed = false;
+      try {
+        processed = await runtime.tick();
+      } catch (error) {
+        if (once) throw error;
+        console.error("[worker] transient production loop error; retrying");
+      }
       if (once) break;
-      if (!processed) await new Promise((resolve) => setTimeout(resolve, pollMs));
+      if (!processed) await pollSleepFn(pollMs);
     } while (true);
   } finally {
     runtime.shutdown();

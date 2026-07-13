@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { createProductionWorker, deliverVariationOutputs, runWorkerTick } from "../src/worker/productionWorker.js";
+import { createProductionWorker, deliverVariationOutputs, runWorker, runWorkerTick } from "../src/worker/productionWorker.js";
 
 function deferred() {
   let resolve;
@@ -396,4 +396,108 @@ test("does not schedule a timer when shutdown races an initial heartbeat", async
   await start;
 
   assert.equal(timers.length, 0);
+});
+
+test("retries a transient startup heartbeat before scheduling the worker timer", async () => {
+  let heartbeatWrites = 0;
+  let scheduled = 0;
+  const worker = createProductionWorker({
+    workerId: "retry-worker",
+    updateHeartbeat: async () => {
+      heartbeatWrites += 1;
+      if (heartbeatWrites < 3) throw new Error("temporary Supabase outage");
+    },
+    sleepFn: async () => {},
+    setIntervalFn: () => {
+      scheduled += 1;
+      return 1;
+    },
+    clearIntervalFn: () => {}
+  });
+
+  await worker.start();
+
+  assert.equal(heartbeatWrites, 3);
+  assert.equal(scheduled, 1);
+  worker.shutdown();
+});
+
+test("heartbeat exhaustion does not fail an otherwise successful production job", async () => {
+  const updates = [];
+  let processed = 0;
+  const worker = createProductionWorker({
+    workerId: "resilient-worker",
+    claimJob: async () => ({ id: "job-heartbeat", projectName: "demo", jobType: "pipeline", progress: 10 }),
+    updateJob: async (id, patch) => updates.push({ id, patch }),
+    updateHeartbeat: async () => { throw new Error("Supabase heartbeat unavailable"); },
+    processJob: async () => {
+      processed += 1;
+      return { outputUrl: "https://example.test/final.mp4" };
+    },
+    sleepFn: async () => {}
+  });
+
+  assert.equal(await worker.tick(), true);
+  assert.equal(processed, 1);
+  assert.equal(updates.at(-1).patch.status, "completed");
+  assert.equal(updates.at(-1).patch.progress, 100);
+});
+
+test("records one worker-online event when the worker runtime starts", async () => {
+  const events = [];
+  const runtime = {
+    workerId: "worker-audit",
+    workerName: "Audit Worker",
+    hostname: "audit-host",
+    capabilities: ["pipeline"],
+    start: async () => {},
+    tick: async () => false,
+    shutdown: () => {}
+  };
+
+  await runWorker({
+    once: true,
+    worker: runtime,
+    recordActivity: async (event) => events.push(event)
+  });
+
+  assert.equal(events.length, 1);
+  assert.equal(events[0].eventType, "production.worker.online");
+  assert.equal(events[0].metadata.workerId, "worker-audit");
+});
+
+test("continuous worker recovers after a transient tick failure", async () => {
+  let ticks = 0;
+  let sleeps = 0;
+  let shutdowns = 0;
+  const stop = new Error("stop test loop");
+  const runtime = {
+    workerId: "recover-worker",
+    workerName: "Recover Worker",
+    hostname: "recover-host",
+    capabilities: ["pipeline"],
+    start: async () => {},
+    tick: async () => {
+      ticks += 1;
+      if (ticks === 1) throw new Error("temporary claim failure");
+      return false;
+    },
+    shutdown: () => { shutdowns += 1; }
+  };
+
+  await assert.rejects(
+    runWorker({
+      worker: runtime,
+      recordActivity: async () => {},
+      pollSleepFn: async () => {
+        sleeps += 1;
+        if (sleeps === 2) throw stop;
+      }
+    }),
+    /stop test loop/
+  );
+
+  assert.equal(ticks, 2);
+  assert.equal(sleeps, 2);
+  assert.equal(shutdowns, 1);
 });

@@ -41,6 +41,7 @@ create table if not exists cf_projects (
   priority text not null default 'normal',
   approval_status text not null default 'draft',
   approval_feedback text,
+  selected_highlight_id text,
   local_path text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -119,6 +120,7 @@ create table if not exists cf_production_jobs (
 
 alter table cf_users add column if not exists auth_user_id uuid;
 alter table cf_users add column if not exists client_id text;
+alter table cf_projects add column if not exists selected_highlight_id text;
 alter table cf_render_jobs add column if not exists output_url text;
 alter table cf_production_jobs add column if not exists attempt_count integer not null default 0;
 alter table cf_production_jobs add column if not exists cancelled_at timestamptz;

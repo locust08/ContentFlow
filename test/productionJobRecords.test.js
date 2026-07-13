@@ -20,6 +20,7 @@ test("schema stores production progress, results, and worker heartbeats", () => 
   assert.match(schema, /result jsonb not null default '\{\}'::jsonb/i);
   assert.match(schema, /create table if not exists cf_worker_heartbeats/i);
   assert.match(schema, /cf_worker_heartbeats[\s\S]*started_at timestamptz not null default now\(\)/i);
+  assert.match(schema, /alter table cf_projects add column if not exists selected_highlight_id text/i);
 });
 
 test("maps operational job and worker records", async () => {
@@ -144,7 +145,7 @@ test("hosted job lists apply job type filters before the limit", async () => {
   }
 });
 
-test("hosted worker status transition only updates one concurrent stale caller", async () => {
+test("hosted worker status transition compares the observed heartbeat timestamp", async () => {
   const db = await import("../src/services/supabaseDb.js");
   const previous = {
     HOSTED_DEMO: process.env.HOSTED_DEMO,
@@ -160,6 +161,7 @@ test("hosted worker status transition only updates one concurrent stale caller",
   global.fetch = async (url, options) => {
     const request = new URL(url);
     const body = JSON.parse(options.body);
+    assert.equal(request.searchParams.get("last_seen_at"), "eq.2026-07-14T00:00:00.000Z");
     if (request.searchParams.get("status") !== `neq.${body.status}` || storedStatus === body.status) {
       return new Response(JSON.stringify([]), { status: 200, headers: { "Content-Type": "application/json" } });
     }
@@ -169,11 +171,57 @@ test("hosted worker status transition only updates one concurrent stale caller",
 
   try {
     const results = await Promise.all([
-      db.setSupabaseWorkerHeartbeatStatus("worker-1", "offline"),
-      db.setSupabaseWorkerHeartbeatStatus("worker-1", "offline")
+      db.setSupabaseWorkerHeartbeatStatus("worker-1", "offline", "2026-07-14T00:00:00.000Z"),
+      db.setSupabaseWorkerHeartbeatStatus("worker-1", "offline", "2026-07-14T00:00:00.000Z")
     ]);
     assert.equal(results.filter(Boolean).length, 1);
     assert.equal(storedStatus, "offline");
+  } finally {
+    global.fetch = originalFetch;
+    restoreEnvironment(previous);
+  }
+});
+
+test("records claimed and completed production job audit events with attempt metadata", async () => {
+  const db = await import("../src/services/supabaseDb.js");
+  const previous = {
+    HOSTED_DEMO: process.env.HOSTED_DEMO,
+    SUPABASE_URL: process.env.SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY
+  };
+  const originalFetch = global.fetch;
+  const events = [];
+  const row = {
+    id: "job-audit",
+    project_name: "demo",
+    job_type: "pipeline",
+    status: "queued",
+    attempt_count: 1,
+    created_at: "2026-07-14T00:00:00.000Z"
+  };
+
+  process.env.HOSTED_DEMO = "true";
+  process.env.SUPABASE_URL = "https://project.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-test";
+  global.fetch = async (url, options = {}) => {
+    const request = new URL(url);
+    if (request.pathname.endsWith("/cf_analytics_events")) {
+      events.push(JSON.parse(options.body));
+      return new Response(JSON.stringify([]), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    if (options.method === "GET") return new Response(JSON.stringify([row]), { status: 200, headers: { "Content-Type": "application/json" } });
+    Object.assign(row, JSON.parse(options.body));
+    return new Response(JSON.stringify([row]), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+
+  try {
+    const claimed = await db.claimNextSupabaseProductionJob();
+    assert.equal(claimed.attemptCount, 2);
+    await db.updateSupabaseProductionJob("job-audit", { status: "completed", progress: 100, result: { ok: true } });
+    assert.deepEqual(events.map((event) => event.event_type), ["production.job.claimed", "production.job.completed"]);
+    assert.equal(events[0].metadata.attemptCount, 2);
+    assert.equal(events[1].metadata.attemptCount, 2);
+    assert.equal(typeof events[1].metadata.durationMs, "number");
   } finally {
     global.fetch = originalFetch;
     restoreEnvironment(previous);

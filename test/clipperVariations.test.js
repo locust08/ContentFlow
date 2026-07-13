@@ -130,6 +130,67 @@ test("freezes highlight and subtitle inputs before rendering every variation", a
   ]);
 });
 
+test("uses the highlight carried by a queued variation job instead of stale local selection", async (t) => {
+  const { root, projectDir } = makeProject();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const generatedDir = path.join(projectDir, "clipper", "generated");
+  const analysisDir = path.join(projectDir, "clipper", "analysis");
+  fs.mkdirSync(analysisDir, { recursive: true });
+  fs.writeFileSync(path.join(generatedDir, "highlight-candidates.json"), JSON.stringify({
+    candidates: [
+      { id: "highlight-1", title: "Stale", start: 0, end: 10 },
+      { id: "highlight-2", title: "Exact hosted choice", start: 12, end: 42 }
+    ]
+  }));
+  fs.writeFileSync(path.join(analysisDir, "source-transcript.json"), JSON.stringify({
+    segments: [{ start: 12, end: 14, text: "Exact hosted choice" }]
+  }));
+
+  const result = await renderClipperVariations({
+    project: "demo",
+    projectDir,
+    highlightId: "highlight-2",
+    reactionIds: ["r-1"],
+    renderClip: async ({ outputName, selectedHighlight }) => ({
+      output: `renders/clips/${outputName}`,
+      clipStart: selectedHighlight.start,
+      clipEnd: selectedHighlight.end
+    })
+  });
+
+  assert.equal(result.selectedHighlight.id, "highlight-2");
+  assert.equal(result.outputs[0].highlightId, "highlight-2");
+  assert.equal(JSON.parse(fs.readFileSync(path.join(generatedDir, "selected-highlight.json"), "utf8")).id, "highlight-2");
+});
+
+test("downloads a hosted reaction reference when the worker has no local copy", async (t) => {
+  const { root, projectDir } = makeProject();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+
+  const result = await renderClipperVariations({
+    project: "demo",
+    projectDir,
+    reactionIds: ["hosted-r-1"],
+    reactionAssets: [{
+      id: "hosted-r-1",
+      name: "Hosted Maya",
+      localPath: "clipper/reaction/hosted-maya.png",
+      url: "https://media.example.test/hosted-maya.png",
+      mediaType: "image"
+    }],
+    fetchImpl: async () => new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "Content-Type": "image/png" } }),
+    renderClip: async ({ outputName, reactionAsset }) => {
+      assert.equal(reactionAsset.id, "hosted-r-1");
+      assert.equal(fs.existsSync(path.join(projectDir, reactionAsset.path)), true);
+      return { output: `renders/clips/${outputName}`, clipStart: 4, clipEnd: 34 };
+    }
+  });
+
+  assert.equal(result.completed, 1);
+  const manifest = JSON.parse(fs.readFileSync(path.join(projectDir, "clipper", "generated", "reaction-characters.json"), "utf8"));
+  assert.equal(manifest.characters.some((character) => character.id === "hosted-r-1"), true);
+});
+
 test("rejects rendering without an active highlight or matching reaction", async (t) => {
   const { root, projectDir } = makeProject();
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
