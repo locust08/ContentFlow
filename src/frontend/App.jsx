@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import { AppShell } from "./layout/AppShell.jsx";
 import { useContentFlow } from "./state/useContentFlow.js";
 import { LoginPage } from "./pages/LoginPage.jsx";
@@ -29,14 +29,23 @@ function Protected({ app, children }) {
   return canAccessPath(app.role, location.pathname) ? children : <Navigate to={getLandingPath(app.role)} replace />;
 }
 
-function ProjectWorkspaceRoute({ app, type }) {
+export function ProjectWorkspaceRoute({ app, type }) {
   const { project = "" } = useParams();
-  const name = decodeURIComponent(project);
+  const name = project;
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
-    if (name && app.activeProject !== name) app.selectProject(name).catch(() => {});
+    let active = true;
+    setLoadError("");
+    if (name && app.activeProject !== name) {
+      app.selectProject(name).catch((error) => {
+        if (active) setLoadError(error.message || "Project could not be loaded");
+      });
+    }
+    return () => { active = false; };
   }, [app.activeProject, app.selectProject, name]);
 
+  if (loadError) return <section className="workspace-loading workspace-load-error"><strong>{loadError}</strong><p>This project may have been removed or is not available to your account.</p><Link className="btn btn--secondary" to="/projects">Back to projects</Link></section>;
   if (!app.activeProjectData || app.activeProject !== name) {
     return <section className="workspace-loading"><span className="spinner" /><strong>Loading {name}</strong></section>;
   }

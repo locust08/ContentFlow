@@ -29,6 +29,7 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
-    setupFiles: [path.join(rootDir, "src", "frontend", "test", "setup.js")]
+    setupFiles: [path.join(rootDir, "src", "frontend", "vitest", "setup.js")],
+    include: ["**/*.vitest.{js,jsx}"]
   }
 });

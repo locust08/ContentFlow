@@ -37,6 +37,15 @@ No actionable P0, P1, or P2 visual mismatch remains.
 
 Post-fix evidence: React tests pass, desktop and 390px browser captures show stable layouts, route-specific workspaces load correctly, project create/delete completes, and browser console contains no warnings or errors.
 
+### Iteration 2
+
+- P1: React Router parameters were decoded twice, breaking project names containing `%`. Fixed by trusting the decoded route parameter and covered with a routed component test.
+- P2: Staff could see folder rename/delete controls. Fixed by gating all folder mutations to Admin and covered with a role visibility test.
+- P2: Failed project refreshes could remain on a spinner. Fixed with a recoverable route error state and Projects return action.
+- P2: The mobile navigation drawer remained open after route changes. Fixed by closing it whenever the pathname changes and covered with a shell navigation test.
+
+Post-fix evidence: 15 frontend tests pass, all 9 repository Node tests pass under bare `node --test`, and the production build succeeds.
+
 ## Primary Interactions Tested
 
 - Open Creator Hub and both project creation choices.
