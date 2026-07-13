@@ -87,6 +87,7 @@ function safeDate(value) {
 
 async function ensureSupabaseReady() {
   if (!isSupabaseConfigured()) return false;
+  if (value("HOSTED_DEMO") === "true") return true;
   await initializeSupabaseSchema();
   return true;
 }
