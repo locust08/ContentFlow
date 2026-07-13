@@ -25,10 +25,12 @@ import {
   deleteSupabaseProject,
   initializeSupabaseSchema,
   listSupabaseMediaItems,
+  listSupabaseActivity,
   listSupabaseOrganization,
   listSupabaseProjectSummaries,
   listSupabaseProductionJobs,
   recordSupabaseApprovalEvent,
+  recordSupabaseActivityEvent,
   supabaseAnalytics,
   supabaseProjectData,
   supabaseStatus,
@@ -510,6 +512,17 @@ async function trySupabaseWrite(task) {
   }
 }
 
+function recordApprovalActivity(recordActivity, projectName, status, feedback = "") {
+  const eventType = status === "in-review"
+    ? "approval.submitted"
+    : status === "approved"
+      ? "approval.approved"
+      : status === "changes-requested"
+        ? "approval.changes_requested"
+        : "";
+  if (eventType) recordActivity(eventType, projectName, `Approval status changed to ${status}`, { status, feedback: feedback || "" });
+}
+
 async function syncProjectAssetsToSupabase(project) {
   const projectDir = safeProject(project);
   for (const asset of listProjectAssets(projectDir, project)) {
@@ -573,6 +586,15 @@ async function handleApi(req, res, url) {
     return summary;
   };
   const shouldQueueEngine = () => hostedDemoMode();
+  const recordActivity = (eventType, projectName, summary, metadata = {}) => {
+    void recordSupabaseActivityEvent({
+      eventType,
+      projectName,
+      actor: requestUser,
+      summary,
+      metadata
+    });
+  };
   const createQueuedJob = async (projectName, jobType, payload = {}) => {
     const summary = hostedDemoMode()
       ? filterProjectsForUser(await listSupabaseProjectSummaries(), requestUser).find((item) => item.name === projectName)
@@ -586,9 +608,14 @@ async function handleApi(req, res, url) {
       requestedBy: requestUser?.id || "local"
     });
     const created = await createSupabaseProductionJob(job);
+    recordActivity("production.queued", projectName, `${jobType} queued`, { jobId: created?.id || "", jobType });
     const data = hostedDemoMode() ? await supabaseProjectData(projectName) : projectData(projectName);
     return { ok: true, queued: true, job: created, project: summary, data };
   };
+
+  if (req.method === "GET" && url.pathname === "/api/activity") {
+    return sendJson(res, 200, { items: await listSupabaseActivity({ user: requestUser, limit: url.searchParams.get("limit") }) });
+  }
 
   if (hostedDemoMode()) {
     const hostedProjects = async () => listSupabaseProjectSummaries();
@@ -648,6 +675,7 @@ async function handleApi(req, res, url) {
         createdAt: new Date().toISOString()
       };
       await upsertSupabaseProject(project);
+      recordActivity("project.created", name, `Project ${name} created`, { type: project.type });
       return sendJson(res, 201, { project });
     }
 
@@ -697,12 +725,16 @@ async function handleApi(req, res, url) {
           approvalFeedback: body.approvalFeedback ?? current?.approvalFeedback ?? ""
         };
         await upsertSupabaseProject(next);
+        if (body.assignedStaffId !== undefined && body.assignedStaffId !== current?.assignedStaffId) {
+          recordActivity("project.assigned", project, `Project assigned to ${next.assignedStaffId || "no one"}`, { assignedStaffId: next.assignedStaffId || "" });
+        }
         if (body.approvalStatus) {
           await recordSupabaseApprovalEvent({
             projectName: project,
             status: body.approvalStatus,
             feedback: body.approvalFeedback ?? next.approvalFeedback
           });
+          recordApprovalActivity(recordActivity, project, body.approvalStatus, body.approvalFeedback ?? next.approvalFeedback);
         }
         return sendJson(res, 200, {
           ok: true,
@@ -845,6 +877,7 @@ async function handleApi(req, res, url) {
     });
     const project = getProjectSummary(name);
     const supabaseWarning = await trySupabaseWrite(() => upsertSupabaseProject(project));
+    recordActivity("project.created", name, `Project ${name} created`, { type: project.type });
     return sendJson(res, 201, { project, supabaseWarning });
   }
 
@@ -891,6 +924,7 @@ async function handleApi(req, res, url) {
     if (req.method === "PUT" && parts[3] === "meta") {
       requireProjectAccess(project);
       const body = await readJsonBody(req);
+      const current = getProjectMeta(project);
       updateProjectMeta(project, {
         type: body.type,
         folderId: body.folderId ?? getProjectMeta(project).folderId,
@@ -905,6 +939,9 @@ async function handleApi(req, res, url) {
         reviewedAt: body.reviewedAt
       });
       const summary = getProjectSummary(project);
+      if (body.assignedStaffId !== undefined && body.assignedStaffId !== current.assignedStaffId) {
+        recordActivity("project.assigned", project, `Project assigned to ${summary.assignedStaffId || "no one"}`, { assignedStaffId: summary.assignedStaffId || "" });
+      }
       const supabaseWarning = await trySupabaseWrite(async () => {
         await upsertSupabaseProject(summary);
         if (body.approvalStatus) {
@@ -915,6 +952,7 @@ async function handleApi(req, res, url) {
           });
         }
       });
+      if (body.approvalStatus) recordApprovalActivity(recordActivity, project, body.approvalStatus, body.approvalFeedback ?? summary.approvalFeedback);
       return sendJson(res, 200, { ok: true, project: summary, data: projectData(project), projects: listProjects(), folders: readFolders(), supabaseWarning });
     }
 
@@ -924,6 +962,7 @@ async function handleApi(req, res, url) {
       const dir = path.join(safeProject(project), "reference");
       ensureDir(dir);
       fs.writeFileSync(path.join(dir, "reference.mp4"), buffer);
+      recordActivity("asset.uploaded", project, "Reference video uploaded", { assetKind: "reference-video" });
       const supabaseWarning = await trySupabaseWrite(() => syncProjectAssetsToSupabase(project));
       return sendJson(res, 200, { ok: true, project: getProjectSummary(project), supabaseWarning });
     }
@@ -933,6 +972,7 @@ async function handleApi(req, res, url) {
       const buffer = await readBody(req);
       const dir = path.join(safeProject(project), "product");
       await saveImageAsset(buffer, dir, "product-image");
+      recordActivity("asset.uploaded", project, "Product image uploaded", { assetKind: "product-image" });
       const supabaseWarning = await trySupabaseWrite(() => syncProjectAssetsToSupabase(project));
       return sendJson(res, 200, { ok: true, project: getProjectSummary(project), data: projectData(project), supabaseWarning });
     }
@@ -942,6 +982,7 @@ async function handleApi(req, res, url) {
       const buffer = await readBody(req);
       const dir = path.join(safeProject(project), "character");
       await saveImageAsset(buffer, dir, "character-reference");
+      recordActivity("asset.uploaded", project, "Character reference uploaded", { assetKind: "character-reference" });
       const supabaseWarning = await trySupabaseWrite(() => syncProjectAssetsToSupabase(project));
       return sendJson(res, 200, { ok: true, project: getProjectSummary(project), data: projectData(project), supabaseWarning });
     }
@@ -1036,6 +1077,7 @@ async function handleApi(req, res, url) {
       const body = await readJsonBody(req);
       if (shouldQueueEngine()) return sendJson(res, 202, await createQueuedJob(project, "clipper-source-link", body));
       const result = await downloadClipperSource({ projectDir: safeProject(project), url: body.url });
+      recordActivity("asset.uploaded", project, "Clipper source uploaded", { assetKind: "clipper-source" });
       const supabaseWarning = await trySupabaseWrite(() => syncProjectAssetsToSupabase(project));
       return sendJson(res, 200, { ok: true, result, data: projectData(project), supabaseWarning });
     }
@@ -1045,6 +1087,7 @@ async function handleApi(req, res, url) {
       const buffer = await readBody(req);
       const dir = path.join(safeProject(project), "clipper", "reaction");
       await saveReactionAsset(buffer, dir, req.headers["x-file-name"] || "");
+      recordActivity("asset.uploaded", project, "Reaction asset uploaded", { assetKind: "reaction-character" });
       const supabaseWarning = await trySupabaseWrite(() => syncProjectAssetsToSupabase(project));
       return sendJson(res, 200, { ok: true, project: getProjectSummary(project), data: projectData(project), supabaseWarning });
     }

@@ -704,6 +704,114 @@ function mapProductionJob(row) {
   } : null;
 }
 
+export function activityLimit(limit) {
+  const parsed = Number(limit);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.min(Math.floor(parsed), 100) : 20;
+}
+
+export function activityVisibilityQuery(user = null) {
+  if (!user || user.role === "admin") return { where: "", params: [] };
+  if (user.role === "staff-editor") {
+    return { where: "p.assigned_staff_id = $1", params: [user.id || "__none__"] };
+  }
+  return {
+    where: "(p.client_id = $1 or p.reviewer_id = $2)",
+    params: [user.clientId || "__none__", user.id || "__none__"]
+  };
+}
+
+export function activityProjectFilter(user = null) {
+  if (user?.role === "staff-editor") return `assigned_staff_id=eq.${eq(user.id || "__none__")}`;
+  return `or=(client_id.eq.${eq(user?.clientId || "__none__")},reviewer_id.eq.${eq(user?.id || "__none__")})`;
+}
+
+function mapActivityEvent(row) {
+  const metadata = row?.metadata && typeof row.metadata === "object" ? row.metadata : {};
+  return {
+    id: row?.id,
+    eventType: row?.event_type || "",
+    projectName: row?.project_name || "",
+    actorId: metadata.actorId || "system",
+    actorName: metadata.actorName || "ContentFlow",
+    actorRole: metadata.actorRole || "system",
+    summary: metadata.summary || "",
+    metadata,
+    createdAt: row?.created_at || ""
+  };
+}
+
+export async function recordSupabaseActivityEvent({
+  eventType,
+  projectName = "",
+  actor = null,
+  summary = "",
+  metadata = {}
+} = {}) {
+  if (!eventType) return { skipped: true };
+  const eventMetadata = {
+    ...(metadata && typeof metadata === "object" ? metadata : {}),
+    actorId: actor?.id || "system",
+    actorName: actor?.name || "ContentFlow",
+    actorRole: actor?.role || "system",
+    summary
+  };
+
+  try {
+    if (hostedRestMode()) {
+      await restRequest("cf_analytics_events", {
+        method: "POST",
+        headers: { Prefer: "return=minimal" },
+        body: {
+          event_type: eventType,
+          project_name: projectName || null,
+          metadata: eventMetadata
+        }
+      });
+      return { skipped: false };
+    }
+    if (!await ensureSupabaseReady()) return { skipped: true };
+    await getPool().query(`
+      insert into cf_analytics_events (event_type, project_name, metadata)
+      values ($1, $2, $3::jsonb)
+    `, [eventType, projectName || null, JSON.stringify(eventMetadata)]);
+    return { skipped: false };
+  } catch (error) {
+    return { skipped: true, error: error.message };
+  }
+}
+
+export async function listSupabaseActivity({ user = null, limit = 20 } = {}) {
+  const safeLimit = activityLimit(limit);
+  try {
+    if (hostedRestMode()) {
+      const filters = ["order=created_at.desc", `limit=${safeLimit}`];
+      if (!user || user.role === "admin") {
+        filters.unshift("select=id,event_type,project_name,metadata,created_at");
+      } else {
+        const projects = await restTable("cf_projects", `select=name&${activityProjectFilter(user)}`);
+        const projectNames = projects.map((project) => project.name).filter(Boolean);
+        if (!projectNames.length) return [];
+        filters.unshift("select=id,event_type,project_name,metadata,created_at");
+        filters.push(`project_name=in.(${projectNames.map(eq).join(",")})`);
+      }
+      return (await restTable("cf_analytics_events", filters.join("&"))).map(mapActivityEvent);
+    }
+    if (!await ensureSupabaseReady()) return [];
+    const { where, params } = activityVisibilityQuery(user);
+    const result = await getPool().query(`
+      select e.id, e.event_type, e.project_name, e.metadata, e.created_at
+      from cf_analytics_events e
+      left join cf_projects p on p.name = e.project_name
+      ${where ? `where ${where}` : ""}
+      order by e.created_at desc
+      limit $${params.length + 1}
+    `, [...params, safeLimit]);
+    return result.rows.map(mapActivityEvent);
+  } catch {
+    return [];
+  }
+}
+
 export async function createSupabaseProductionJob(job) {
   if (hostedRestMode()) {
     const [row] = await restRequest("cf_production_jobs", {
@@ -780,20 +888,47 @@ export async function claimNextSupabaseProductionJob() {
 }
 
 export async function updateSupabaseProductionJob(id, patch = {}) {
-  if (!id || !await ensureSupabaseReady()) throw new Error("Supabase is not configured.");
+  if (!id) throw new Error("Supabase job id is required.");
   const status = patch.status || "processing";
   const completedAt = ["completed", "failed"].includes(status) ? new Date().toISOString() : null;
-  const result = await getPool().query(`
-    update cf_production_jobs
-    set status = $2,
-      output_url = $3,
-      error = $4,
-      completed_at = coalesce($5::timestamptz, completed_at),
-      updated_at = now()
-    where id = $1
-    returning *
-  `, [id, status, patch.outputUrl || null, patch.error || null, completedAt]);
-  return mapProductionJob(result.rows[0]);
+  let job = null;
+  if (hostedRestMode()) {
+    const [row] = await restRequest(`cf_production_jobs?id=eq.${eq(id)}`, {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: {
+        status,
+        output_url: patch.outputUrl || null,
+        error: patch.error || null,
+        completed_at: completedAt,
+        updated_at: new Date().toISOString()
+      }
+    });
+    job = mapProductionJob(row);
+  } else {
+    if (!await ensureSupabaseReady()) throw new Error("Supabase is not configured.");
+    const result = await getPool().query(`
+      update cf_production_jobs
+      set status = $2,
+        output_url = $3,
+        error = $4,
+        completed_at = coalesce($5::timestamptz, completed_at),
+        updated_at = now()
+      where id = $1
+      returning *
+    `, [id, status, patch.outputUrl || null, patch.error || null, completedAt]);
+    job = mapProductionJob(result.rows[0]);
+  }
+  if (job && (status === "completed" || status === "failed")) {
+    void recordSupabaseActivityEvent({
+      eventType: `production.${status}`,
+      projectName: job.projectName,
+      actor: { id: "production-worker", name: "ContentFlow production worker", role: "system" },
+      summary: status === "completed" ? `${job.jobType} completed` : `${job.jobType} failed`,
+      metadata: { jobId: job.id, jobType: job.jobType, outputUrl: job.outputUrl, error: job.error }
+    });
+  }
+  return job;
 }
 
 function contentTypeForPath(filePath) {
