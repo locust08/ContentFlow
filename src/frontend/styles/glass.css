@@ -1,0 +1,595 @@
+html {
+  background: #e8e9e7;
+}
+
+body {
+  min-width: 320px;
+  background-color: #e8e9e7;
+  background-image: url("/assets/brand/contentflow-studio.webp");
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+}
+
+.app-shell {
+  min-height: 100dvh;
+  grid-template-columns: var(--sidebar) minmax(0, 1fr);
+  gap: 14px;
+  padding: 14px;
+  background: rgba(244, 244, 246, 0.5);
+}
+
+.app-sidebar,
+.app-main,
+.topbar,
+.card,
+.metric-card,
+.filter-bar,
+.folder-panel,
+.production-progress,
+.quick-tool,
+.project-tile,
+.empty-tile,
+.settings-grid article {
+  border-color: var(--glass-edge);
+  background: var(--glass);
+  box-shadow: 0 1px 0 rgba(255,255,255,.8) inset, var(--glass-shadow);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.08);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.08);
+}
+
+.app-sidebar {
+  top: 14px;
+  height: calc(100dvh - 28px);
+  border: 1px solid var(--glass-edge);
+  border-radius: 8px;
+  padding: 18px 14px;
+}
+
+.app-main {
+  min-width: 0;
+  min-height: calc(100dvh - 28px);
+  overflow: clip;
+  border: 1px solid var(--glass-edge);
+  border-radius: 8px;
+  background: rgba(249, 249, 250, 0.68);
+}
+
+.topbar {
+  height: 64px;
+  margin: 0;
+  padding: 0 28px;
+  border: 0;
+  border-bottom: 1px solid rgba(99,99,107,.14);
+  border-radius: 0;
+  box-shadow: none;
+  background: rgba(255,255,255,.56);
+}
+
+.page-frame {
+  width: min(100%, 1480px);
+  margin-inline: auto;
+  padding: 28px 28px 118px;
+}
+
+.page-stack,
+.studio-page,
+.workspace-page {
+  gap: 18px;
+}
+
+.page-heading h1,
+.workspace-heading h1 {
+  font-size: clamp(27px, 3vw, 36px);
+  letter-spacing: 0;
+}
+
+.dashboard-heading {
+  align-items: center;
+  padding: 4px 2px 2px;
+}
+
+.eyebrow {
+  color: #6a6556;
+  letter-spacing: .07em;
+}
+
+.btn,
+.icon-button,
+input,
+select,
+textarea {
+  box-shadow: 0 1px 0 rgba(255,255,255,.75) inset;
+}
+
+.btn--primary,
+.create-button {
+  box-shadow: 0 8px 24px rgba(145,111,0,.16), 0 1px 0 rgba(255,255,255,.55) inset;
+}
+
+.btn--secondary,
+.icon-button,
+input,
+select,
+textarea {
+  border-color: rgba(99,99,107,.2);
+  background: rgba(255,255,255,.76);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: #b58e00;
+  box-shadow: 0 0 0 3px rgba(255,210,31,.22);
+}
+
+.card,
+.metric-card {
+  border: 1px solid var(--glass-edge);
+}
+
+.metric-card {
+  min-height: 148px;
+  padding: 19px 20px;
+  box-shadow: 0 1px 0 rgba(255,255,255,.85) inset, 0 12px 32px rgba(36,36,39,.09);
+}
+
+.metric-card__label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #57575d;
+}
+
+.metric-card__label svg {
+  color: #705700;
+}
+
+.metric-card strong {
+  font-size: 36px;
+}
+
+.dashboard-grid--primary {
+  grid-template-columns: minmax(0, 1.45fr) minmax(300px, .75fr);
+}
+
+.flow-steps {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.flow-steps::before {
+  content: "";
+  position: absolute;
+  top: 18px;
+  left: 10%;
+  right: 10%;
+  height: 2px;
+  background: rgba(113,113,122,.28);
+}
+
+.flow-steps li {
+  z-index: 1;
+  min-width: 0;
+  display: grid;
+  justify-items: center;
+  gap: 9px;
+  padding: 0 5px;
+  text-align: center;
+}
+
+.flow-steps li > span {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 2px solid rgba(113,113,122,.34);
+  border-radius: 50%;
+  color: #68686f;
+  background: rgba(255,255,255,.92);
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.flow-steps li.complete > span,
+.flow-steps li.current > span {
+  border-color: #c9a200;
+  color: var(--ink);
+  background: var(--yellow);
+}
+
+.flow-steps li strong {
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.workflow-current {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  gap: 4px 14px;
+  margin-top: 19px;
+  padding: 14px;
+  border: 1px solid rgba(99,99,107,.14);
+  border-radius: 7px;
+  background: rgba(255,255,255,.52);
+}
+
+.workflow-current > span,
+.workflow-current > strong,
+.workflow-current > small {
+  grid-column: 1;
+}
+
+.workflow-current > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.workflow-current > span i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--yellow);
+}
+
+.workflow-current > small {
+  color: var(--muted);
+}
+
+.workflow-current > a {
+  grid-column: 2;
+  grid-row: 1 / span 3;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #725800;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.role-cards {
+  grid-template-columns: 1fr;
+}
+
+.role-cards article {
+  min-height: 76px;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-color: rgba(99,99,107,.15);
+  background: rgba(255,255,255,.46);
+}
+
+.role-cards article > div {
+  display: grid;
+  gap: 3px;
+}
+
+.role-avatar {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #604b00;
+  background: var(--yellow-soft);
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.role-cards small {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.text-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #6d5500;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.activity-feed {
+  display: grid;
+}
+
+.activity-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 4px;
+  border-top: 1px solid rgba(99,99,107,.13);
+}
+
+.activity-row:first-child {
+  border-top: 0;
+}
+
+.activity-row__icon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  color: #6c5300;
+  background: var(--yellow-soft);
+}
+
+.activity-row__icon--danger {
+  color: var(--red);
+  background: #fff1f1;
+}
+
+.activity-row > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.activity-row strong,
+.activity-row small {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.activity-row small,
+.activity-row time {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.tool-hero {
+  min-height: 270px;
+  border: 1px solid var(--glass-edge);
+  background-image: url("/assets/brand/contentflow-studio.webp");
+  background-size: cover;
+  background-position: center;
+  box-shadow: var(--glass-shadow);
+}
+
+.tool-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(255,255,255,.72);
+}
+
+.tool-hero::after {
+  display: none;
+}
+
+.tool-hero--clipper::before {
+  background: rgba(21,21,21,.76);
+}
+
+.tool-hero__tag,
+.tool-hero__copy {
+  position: relative;
+  z-index: 1;
+}
+
+.quick-tool__icon--violet,
+.project-tile__icon--clipper {
+  color: #4f4f56;
+  background: rgba(224,224,228,.82);
+}
+
+.quick-tool__icon--blue {
+  color: #335f6d;
+  background: #e7f2f4;
+}
+
+.data-row,
+.highlight-card,
+.reaction-card,
+.blueprint-list article,
+.compact-status-list span,
+.empty-state,
+.file-picker,
+.vertical-preview-placeholder {
+  border-color: rgba(99,99,107,.16);
+}
+
+.data-row,
+.highlight-card,
+.reaction-card,
+.blueprint-list article,
+.empty-state,
+.file-picker {
+  background: rgba(255,255,255,.68);
+}
+
+.data-table {
+  background: rgba(255,255,255,.46);
+}
+
+.data-table tbody tr:hover {
+  background: rgba(255,247,207,.5);
+}
+
+.modal,
+.side-drawer {
+  border-color: var(--glass-edge);
+  background: var(--glass-strong);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(24px) saturate(1.08);
+  -webkit-backdrop-filter: blur(24px) saturate(1.08);
+}
+
+.modal-backdrop,
+.drawer-backdrop {
+  background: rgba(41,41,43,.34);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.production-action-bar {
+  left: calc(var(--sidebar) + 42px);
+  right: 28px;
+  bottom: 26px;
+  border-color: rgba(255,255,255,.62);
+  color: var(--ink);
+  background: rgba(255,255,255,.82);
+  box-shadow: 0 20px 54px rgba(36,36,39,.2);
+}
+
+.production-action-bar small {
+  color: var(--muted);
+}
+
+.production-action-bar .btn--secondary {
+  color: var(--ink);
+  border-color: rgba(99,99,107,.2);
+  background: rgba(255,255,255,.72);
+}
+
+.login-screen,
+.loading-screen {
+  background-color: rgba(236,237,235,.42);
+  background-image: url("/assets/brand/contentflow-studio.webp");
+  background-size: cover;
+  background-position: center;
+}
+
+.login-card,
+.loading-card {
+  border: 1px solid var(--glass-edge);
+  border-radius: 8px;
+  padding: 30px;
+  background: var(--glass);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .app-sidebar,
+  .app-main,
+  .topbar,
+  .card,
+  .metric-card,
+  .filter-bar,
+  .folder-panel,
+  .production-progress,
+  .quick-tool,
+  .project-tile,
+  .empty-tile,
+  .settings-grid article,
+  .modal,
+  .side-drawer,
+  .production-action-bar {
+    background: rgba(255,255,255,.96);
+  }
+}
+
+@media (max-width: 1180px) {
+  .dashboard-grid--primary {
+    grid-template-columns: 1fr;
+  }
+
+  .role-cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  body {
+    background-attachment: scroll;
+  }
+
+  .app-shell {
+    display: block;
+    padding: 0;
+    background: rgba(244,244,246,.62);
+  }
+
+  .app-main {
+    min-height: 100dvh;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .app-sidebar {
+    top: 0;
+    height: 100dvh;
+    border-radius: 0 8px 8px 0;
+    background: rgba(255,255,255,.93);
+  }
+
+  .page-frame {
+    padding: 22px 18px 116px;
+  }
+
+  .production-action-bar {
+    left: 18px;
+    right: 18px;
+    bottom: 18px;
+  }
+}
+
+@media (max-width: 650px) {
+  .metric-card {
+    min-height: 126px;
+  }
+
+  .flow-steps {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 6px;
+  }
+
+  .flow-steps::before {
+    display: none;
+  }
+
+  .flow-steps li {
+    min-width: 105px;
+  }
+
+  .role-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .workflow-current {
+    grid-template-columns: 1fr;
+  }
+
+  .workflow-current > a {
+    grid-column: 1;
+    grid-row: auto;
+    margin-top: 7px;
+  }
+
+  .activity-row {
+    grid-template-columns: auto minmax(0,1fr);
+  }
+
+  .activity-row time {
+    grid-column: 2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}

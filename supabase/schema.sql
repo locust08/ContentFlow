@@ -123,5 +123,7 @@ create index if not exists idx_cf_projects_approval on cf_projects(approval_stat
 create index if not exists idx_cf_assets_project on cf_assets(project_name);
 create index if not exists idx_cf_renders_project on cf_render_jobs(project_name);
 create index if not exists idx_cf_analytics_event_type on cf_analytics_events(event_type);
+create index if not exists idx_cf_analytics_events_created_at on cf_analytics_events(created_at desc);
+create index if not exists idx_cf_analytics_events_project_name on cf_analytics_events(project_name);
 create index if not exists idx_cf_production_jobs_status on cf_production_jobs(status, created_at);
 create index if not exists idx_cf_production_jobs_project on cf_production_jobs(project_name);

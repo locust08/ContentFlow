@@ -18,6 +18,7 @@ export function useContentFlow() {
     productionJobs: [],
     supabase: {},
     analytics: null,
+    activityItems: [],
     auth: { config: null, user: null, required: false }
   });
 
@@ -49,12 +50,13 @@ export function useContentFlow() {
         return;
       }
 
-      const [projectData, organization, media, supabase, analytics] = await Promise.all([
+      const [projectData, organization, media, supabase, analytics, activity] = await Promise.all([
         api("/api/projects"),
         api("/api/organization"),
         api("/api/media-library"),
         api("/api/supabase/status").catch(() => ({})),
-        api("/api/supabase/analytics").catch(() => ({ analytics: null }))
+        api("/api/supabase/analytics").catch(() => ({ analytics: null })),
+        api("/api/activity?limit=20").catch(() => ({ items: [] }))
       ]);
 
       setState((current) => ({
@@ -67,6 +69,7 @@ export function useContentFlow() {
         mediaItems: media.items || [],
         supabase,
         analytics: analytics.analytics || null,
+        activityItems: activity.items || [],
         activeView: current.activeView === "login" ? "dashboard" : current.activeView,
         status: "Ready"
       }));

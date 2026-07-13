@@ -6,6 +6,7 @@ const state = {
   selectedStaffId: localStorage.getItem("contentflow.mobile.staffId") || "",
   activeProject: "",
   activeData: null,
+  activeView: "projects",
   auth: { config: null, user: null, required: false }
 };
 
@@ -13,7 +14,10 @@ const $ = (selector) => document.querySelector(selector);
 
 function setStatus(text) {
   const node = $("#mobile-status");
-  if (node) node.textContent = text;
+  if (node) {
+    node.textContent = text;
+    node.hidden = text === "Ready";
+  }
 }
 
 async function api(path, options = {}) {
@@ -63,8 +67,20 @@ function campaignName(campaignId) {
 }
 
 function assignedProjects() {
-  if (!state.selectedStaffId) return state.projects;
-  return state.projects.filter((project) => project.assignedStaffId === state.selectedStaffId);
+  return state.auth.user ? state.projects : state.projects.filter((project) => !state.selectedStaffId || project.assignedStaffId === state.selectedStaffId);
+}
+
+function showView(view) {
+  state.activeView = view;
+  const title = view.charAt(0).toUpperCase() + view.slice(1);
+  $("#mobile-view-title").textContent = title;
+  document.querySelectorAll("[data-mobile-view]").forEach((node) => {
+    node.hidden = node.dataset.mobileView !== view;
+  });
+  document.querySelectorAll(".mobile-nav [data-view]").forEach((node) => {
+    const active = node.dataset.view === view;
+    node.toggleAttribute("aria-current", active);
+  });
 }
 
 function renderStaffSelect() {
@@ -73,6 +89,24 @@ function renderStaffSelect() {
   $("#staff-select").innerHTML = staff.map((member) => `
     <option value="${member.id}" ${member.id === state.selectedStaffId ? "selected" : ""}>${member.name} - ${member.role || "staff"}</option>
   `).join("");
+}
+
+function renderProfile() {
+  const user = state.auth.user;
+  $("#mobile-profile-name").textContent = user?.email || "Demo staff member";
+  $("#mobile-profile-role").textContent = user?.role || (user ? "Authorized project access" : "Choose a demo staff identity");
+}
+
+function renderProjectContexts() {
+  const summary = state.activeData?.summary;
+  const hasProject = Boolean(summary);
+  $("#upload-project-name").textContent = summary?.name || "Select a project from Projects";
+  $("#upload-project-meta").textContent = summary ? `${typeLabel(summary.type)} files attach to this project.` : "Files are attached to the active project.";
+  $("#review-project-name").textContent = summary?.name || "Select a project from Projects";
+  $("#review-project-meta").textContent = summary ? `Current status: ${summary.approvalStatus || "draft"}.` : "Set the status and leave clear feedback.";
+  document.querySelectorAll("[data-project-required]").forEach((node) => {
+    node.disabled = !hasProject;
+  });
 }
 
 function renderMetrics() {
@@ -107,6 +141,7 @@ function renderDetail() {
   const summary = data?.summary;
   if (!summary) {
     $("#project-detail").hidden = true;
+    renderProjectContexts();
     return;
   }
 
@@ -135,6 +170,7 @@ function renderDetail() {
         </article>
       `).join("")
     : `<p class="empty">Rendered media and source previews appear here after the project has assets.</p>`;
+  renderProjectContexts();
 }
 
 async function load() {
@@ -159,6 +195,7 @@ async function openProject(name, announce = true) {
   state.activeData = await api(`/api/projects/${encodeURIComponent(name)}`);
   renderProjects();
   renderDetail();
+  showView("projects");
   if (announce) setStatus("Project ready");
 }
 
@@ -172,6 +209,7 @@ async function uploadFile(inputSelector, endpoint) {
     const response = await fetch(`/api/projects/${encodeURIComponent(state.activeProject)}/${endpoint}`, {
       method: "POST",
       headers: {
+        ...authHeaders(),
         "Content-Type": "application/octet-stream",
         "X-File-Name": file.name
       },
@@ -231,6 +269,10 @@ bind("#mobile-projects", "click", async (event) => {
   if (card) await openProject(card.dataset.project);
 });
 
+document.querySelectorAll(".mobile-nav [data-view]").forEach((node) => {
+  node.addEventListener("click", () => showView(node.dataset.view));
+});
+
 bind("#refresh-mobile", "click", load);
 bind("#mobile-auth-form", "submit", async (event) => {
   event.preventDefault();
@@ -246,6 +288,7 @@ bind("#mobile-logout", "click", async () => {
   state.activeData = null;
   await initializeAuth();
   renderDetail();
+  renderProfile();
   if (!state.auth.required) await load();
 });
 bind("#mobile-upload-reference", "click", () => uploadFile("#mobile-reference-file", "reference"));
@@ -259,4 +302,6 @@ if ("serviceWorker" in navigator) {
 }
 
 await initializeAuth();
+renderProfile();
+renderProjectContexts();
 load().catch((error) => setStatus(error.message));
