@@ -27,6 +27,7 @@ async function withCommandCenter(run) {
   };
   const originalFetch = global.fetch;
   const events = [];
+  const requests = [];
   const jobs = [
     { id: "failed-job", project_name: "staff-project", job_type: "pipeline", status: "failed", attempt_count: 1 },
     { id: "queued-job", project_name: "staff-project", job_type: "render-final-video", status: "queued", attempt_count: 0 },
@@ -59,6 +60,7 @@ async function withCommandCenter(run) {
   global.fetch = async (input, options = {}) => {
     const url = new URL(String(input));
     if (url.origin !== "https://project.supabase.co") return originalFetch(input, options);
+    requests.push({ url, options });
 
     if (url.pathname === "/auth/v1/user") {
       const token = String(options.headers?.Authorization || "").replace(/^Bearer\s+/i, "");
@@ -87,15 +89,19 @@ async function withCommandCenter(run) {
       const jobId = url.searchParams.get("id");
       const projectName = url.searchParams.get("project_name");
       const status = url.searchParams.get("status");
+      const jobType = url.searchParams.get("job_type");
       if (jobId) result = result.filter((job) => job.id === jobId.replace("eq.", ""));
       if (projectName) result = result.filter((job) => job.project_name === projectName.replace("eq.", ""));
       if (status) result = result.filter((job) => job.status === status.replace("eq.", ""));
+      if (jobType) result = result.filter((job) => job.job_type === jobType.replace("eq.", ""));
       return json(result);
     }
     if (table === "cf_worker_heartbeats") {
       if (options.method === "PATCH") {
         const worker = workers.find((item) => item.worker_id === (url.searchParams.get("worker_id") || "").replace("eq.", ""));
-        Object.assign(worker, JSON.parse(options.body));
+        const body = JSON.parse(options.body);
+        if (url.searchParams.get("status") !== `neq.${body.status}` || worker.status === body.status || worker.rejectTransition) return json([]);
+        Object.assign(worker, body);
         return json([worker]);
       }
       return json(workers);
@@ -114,7 +120,7 @@ async function withCommandCenter(run) {
   const auth = (token) => ({ Authorization: `Bearer ${token}` });
 
   try {
-    await run({ baseUrl, auth, events, jobs, workers });
+    await run({ baseUrl, auth, events, jobs, workers, requests });
   } finally {
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     global.fetch = originalFetch;
@@ -122,8 +128,8 @@ async function withCommandCenter(run) {
   }
 }
 
-test("admin command center lists operational jobs and persists each offline worker event once", async () => {
-  await withCommandCenter(async ({ baseUrl, auth, events, workers }) => {
+test("admin command center forwards filters and persists each offline worker event once", async () => {
+  await withCommandCenter(async ({ baseUrl, auth, events, workers, requests }) => {
     const list = await fetch(`${baseUrl}/api/production-jobs?project=staff-project&status=failed&jobType=pipeline`, { headers: auth("admin-auth") });
     assert.equal(list.status, 200);
     const body = await list.json();
@@ -131,6 +137,8 @@ test("admin command center lists operational jobs and persists each offline work
     assert.deepEqual(body.jobs.map((job) => job.id), ["failed-job"]);
     assert.equal(typeof body.summary.queued, "number");
     assert.equal(body.summary.total, 1);
+    const jobListRequest = requests.find(({ url }) => url.pathname.endsWith("/cf_production_jobs") && url.searchParams.get("select") === "*");
+    assert.equal(jobListRequest.url.searchParams.get("job_type"), "eq.pipeline");
     assert.ok(Array.isArray(body.workers));
     assert.equal(body.workers[0].health.status, "offline");
     assert.equal(workers[0].status, "offline");
@@ -139,6 +147,17 @@ test("admin command center lists operational jobs and persists each offline work
     const refresh = await fetch(`${baseUrl}/api/production-workers`, { headers: auth("admin-auth") });
     assert.equal(refresh.status, 200);
     assert.equal(events.length, 1);
+  });
+});
+
+test("a stale worker that loses the conditional offline transition emits no offline event", async () => {
+  await withCommandCenter(async ({ baseUrl, auth, events, workers }) => {
+    workers[0].rejectTransition = true;
+
+    const response = await fetch(`${baseUrl}/api/production-workers`, { headers: auth("admin-auth") });
+    assert.equal(response.status, 200);
+    assert.equal(workers[0].status, "online");
+    assert.equal(events.length, 0);
   });
 });
 
@@ -185,4 +204,61 @@ test("production command center is admin-only and staff job visibility stays pro
     const otherProjectJobs = await fetch(`${baseUrl}/api/projects/other-project/jobs`, { headers: auth("staff-auth") });
     assert.equal(otherProjectJobs.status, 403);
   });
+});
+
+test("production command center rejects trailing route segments", async () => {
+  await withCommandCenter(async ({ baseUrl, auth }) => {
+    const retry = await fetch(`${baseUrl}/api/production-jobs/queued-job/retry/extra`, { method: "POST", headers: auth("admin-auth") });
+    assert.equal(retry.status, 404);
+
+    const cancel = await fetch(`${baseUrl}/api/production-jobs/queued-job/cancel/extra`, { method: "POST", headers: auth("admin-auth") });
+    assert.equal(cancel.status, 404);
+
+    const projectJobs = await fetch(`${baseUrl}/api/projects/staff-project/jobs/extra`, { headers: auth("staff-auth") });
+    assert.equal(projectJobs.status, 404);
+  });
+});
+
+test("local authenticated manager-client users cannot access command center endpoints", async () => {
+  const previous = {
+    HOSTED_DEMO: process.env.HOSTED_DEMO,
+    REQUIRE_AUTH: process.env.REQUIRE_AUTH,
+    SUPABASE_URL: process.env.SUPABASE_URL,
+    SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
+    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    SUPABASE_DATABASE_URL: process.env.SUPABASE_DATABASE_URL,
+    SUPABASE_DB_PASSWORD: process.env.SUPABASE_DB_PASSWORD
+  };
+  const originalFetch = global.fetch;
+  process.env.HOSTED_DEMO = "false";
+  process.env.REQUIRE_AUTH = "true";
+  process.env.SUPABASE_URL = "https://project.supabase.co";
+  process.env.SUPABASE_ANON_KEY = "anon-test";
+  delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+  delete process.env.SUPABASE_DATABASE_URL;
+  delete process.env.SUPABASE_DB_PASSWORD;
+  global.fetch = async (input, options = {}) => {
+    const url = new URL(String(input));
+    if (url.origin !== "https://project.supabase.co") return originalFetch(input, options);
+    const token = String(options.headers?.Authorization || "").replace(/^Bearer\s+/i, "");
+    return json(token === "reviewer-auth"
+      ? { id: "reviewer-auth", email: "reviewer@digitalbee.ai" }
+      : { id: "admin-auth", email: "admin@digitalbee.ai" });
+  };
+
+  const server = http.createServer(handleRequest);
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+  const baseUrl = `http://127.0.0.1:${port}`;
+
+  try {
+    const client = await fetch(`${baseUrl}/api/production-workers`, { headers: { Authorization: "Bearer reviewer-auth" } });
+    assert.equal(client.status, 403);
+    const admin = await fetch(`${baseUrl}/api/production-workers`, { headers: { Authorization: "Bearer admin-auth" } });
+    assert.equal(admin.status, 200);
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    global.fetch = originalFetch;
+    restoreEnvironment(previous);
+  }
 });

@@ -610,14 +610,16 @@ async function handleApi(req, res, url) {
     const health = workerHealth(worker);
     if (health.status === "offline" && worker.status !== "offline") {
       const updated = await setSupabaseWorkerHeartbeatStatus(worker.workerId, "offline");
-      await recordSupabaseActivityEvent({
-        eventType: "production.worker.offline",
-        projectName: "",
-        actor: requestUser,
-        summary: `${worker.workerName || worker.workerId} is offline`,
-        metadata: { workerId: worker.workerId, workerName: worker.workerName || worker.workerId }
-      });
-      return { ...worker, ...updated, health };
+      if (updated) {
+        await recordSupabaseActivityEvent({
+          eventType: "production.worker.offline",
+          projectName: "",
+          actor: requestUser,
+          summary: `${worker.workerName || worker.workerId} is offline`,
+          metadata: { workerId: worker.workerId, workerName: worker.workerName || worker.workerId }
+        });
+        return { ...worker, ...updated, health };
+      }
     }
     return { ...worker, health };
   }));
@@ -720,7 +722,7 @@ async function handleApi(req, res, url) {
         return sendJson(res, 200, data);
       }
 
-      if (req.method === "GET" && parts[3] === "jobs") {
+      if (req.method === "GET" && parts.length === 4 && parts[3] === "jobs") {
         await requireHostedProjectJobAccess(project);
         return sendJson(res, 200, { jobs: await listSupabaseProductionJobs({ projectName: project }) });
       }
@@ -869,7 +871,7 @@ async function handleApi(req, res, url) {
     const status = url.searchParams.get("status") || "";
     const projectName = url.searchParams.get("project") || "";
     const jobType = url.searchParams.get("jobType") || "";
-    const jobs = (await listSupabaseProductionJobs({ projectName, status })).filter((job) => !jobType || job.jobType === jobType);
+    const jobs = await listSupabaseProductionJobs({ projectName, status, jobType });
     const workers = await operationalWorkers();
     return sendJson(res, 200, { jobs, summary: productionJobSummary(jobs), workers });
   }
@@ -879,7 +881,7 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, { workers: await operationalWorkers() });
   }
 
-  if (req.method === "POST" && parts[0] === "api" && parts[1] === "production-jobs" && parts[2] && parts[3] === "retry") {
+  if (req.method === "POST" && parts.length === 4 && parts[0] === "api" && parts[1] === "production-jobs" && parts[2] && parts[3] === "retry") {
     requireAdmin();
     const id = decodeURIComponent(parts[2]);
     const current = await getSupabaseProductionJob(id);
@@ -897,7 +899,7 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, { job });
   }
 
-  if (req.method === "POST" && parts[0] === "api" && parts[1] === "production-jobs" && parts[2] && parts[3] === "cancel") {
+  if (req.method === "POST" && parts.length === 4 && parts[0] === "api" && parts[1] === "production-jobs" && parts[2] && parts[3] === "cancel") {
     requireAdmin();
     const id = decodeURIComponent(parts[2]);
     const current = await getSupabaseProductionJob(id);
@@ -981,7 +983,7 @@ async function handleApi(req, res, url) {
       return sendJson(res, 200, projectData(project));
     }
 
-    if (req.method === "GET" && parts[3] === "jobs") {
+    if (req.method === "GET" && parts.length === 4 && parts[3] === "jobs") {
       requireProjectJobAccess(project);
       return sendJson(res, 200, { jobs: await listSupabaseProductionJobs({ projectName: project }) });
     }

@@ -877,11 +877,13 @@ export async function createSupabaseProductionJob(job) {
   return mapProductionJobRecord(result.rows[0]);
 }
 
-export async function listSupabaseProductionJobs({ projectName = "", status = "", limit = 50 } = {}) {
+export async function listSupabaseProductionJobs({ projectName = "", status = "", jobType = "", limit = 50 } = {}) {
   if (hostedRestMode()) {
-    const filters = ["select=*", "order=created_at.desc", `limit=${Math.max(1, Math.min(Number(limit) || 50, 200))}`];
+    const filters = ["select=*", "order=created_at.desc"];
     if (projectName) filters.push(`project_name=eq.${eq(projectName)}`);
     if (status) filters.push(`status=eq.${eq(status)}`);
+    if (jobType) filters.push(`job_type=eq.${eq(jobType)}`);
+    filters.push(`limit=${Math.max(1, Math.min(Number(limit) || 50, 200))}`);
     return (await restTable("cf_production_jobs", filters.join("&"))).map(mapProductionJobRecord);
   }
   if (!await ensureSupabaseReady()) return [];
@@ -894,6 +896,10 @@ export async function listSupabaseProductionJobs({ projectName = "", status = ""
   if (status) {
     params.push(status);
     clauses.push(`status = $${params.length}`);
+  }
+  if (jobType) {
+    params.push(jobType);
+    clauses.push(`job_type = $${params.length}`);
   }
   params.push(Math.max(1, Math.min(Number(limit) || 50, 200)));
   const where = clauses.length ? `where ${clauses.join(" and ")}` : "";
@@ -1139,7 +1145,7 @@ export async function listSupabaseWorkerHeartbeats() {
 export async function setSupabaseWorkerHeartbeatStatus(workerId, status) {
   if (!workerId) throw new Error("Worker id is required.");
   if (hostedRestMode()) {
-    const [row] = await restRequest(`cf_worker_heartbeats?worker_id=eq.${eq(workerId)}`, {
+    const [row] = await restRequest(`cf_worker_heartbeats?worker_id=eq.${eq(workerId)}&status=neq.${eq(status)}`, {
       method: "PATCH",
       headers: { Prefer: "return=representation" },
       body: { status, updated_at: new Date().toISOString() }
@@ -1150,7 +1156,7 @@ export async function setSupabaseWorkerHeartbeatStatus(workerId, status) {
   const result = await getPool().query(`
     update cf_worker_heartbeats
     set status = $2, updated_at = now()
-    where worker_id = $1
+    where worker_id = $1 and status is distinct from $2
     returning *
   `, [workerId, status]);
   return mapWorkerHeartbeatRecord(result.rows[0]);

@@ -112,3 +112,70 @@ test("hosted claims compare the queued attempt count and return null after a sta
     restoreEnvironment(previous);
   }
 });
+
+test("hosted job lists apply job type filters before the limit", async () => {
+  const db = await import("../src/services/supabaseDb.js");
+  const previous = {
+    HOSTED_DEMO: process.env.HOSTED_DEMO,
+    SUPABASE_URL: process.env.SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY
+  };
+  const originalFetch = global.fetch;
+  const requests = [];
+
+  process.env.HOSTED_DEMO = "true";
+  process.env.SUPABASE_URL = "https://project.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-test";
+  global.fetch = async (url, options) => {
+    requests.push({ url: new URL(url), options });
+    return new Response(JSON.stringify([]), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+
+  try {
+    await db.listSupabaseProductionJobs({ projectName: "demo", status: "failed", jobType: "pipeline", limit: 1 });
+    const request = requests[0].url;
+    assert.equal(request.searchParams.get("project_name"), "eq.demo");
+    assert.equal(request.searchParams.get("status"), "eq.failed");
+    assert.equal(request.searchParams.get("job_type"), "eq.pipeline");
+    assert.equal(request.searchParams.get("limit"), "1");
+  } finally {
+    global.fetch = originalFetch;
+    restoreEnvironment(previous);
+  }
+});
+
+test("hosted worker status transition only updates one concurrent stale caller", async () => {
+  const db = await import("../src/services/supabaseDb.js");
+  const previous = {
+    HOSTED_DEMO: process.env.HOSTED_DEMO,
+    SUPABASE_URL: process.env.SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY
+  };
+  const originalFetch = global.fetch;
+  let storedStatus = "online";
+
+  process.env.HOSTED_DEMO = "true";
+  process.env.SUPABASE_URL = "https://project.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-test";
+  global.fetch = async (url, options) => {
+    const request = new URL(url);
+    const body = JSON.parse(options.body);
+    if (request.searchParams.get("status") !== `neq.${body.status}` || storedStatus === body.status) {
+      return new Response(JSON.stringify([]), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    storedStatus = body.status;
+    return new Response(JSON.stringify([{ worker_id: "worker-1", status: storedStatus }]), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+
+  try {
+    const results = await Promise.all([
+      db.setSupabaseWorkerHeartbeatStatus("worker-1", "offline"),
+      db.setSupabaseWorkerHeartbeatStatus("worker-1", "offline")
+    ]);
+    assert.equal(results.filter(Boolean).length, 1);
+    assert.equal(storedStatus, "offline");
+  } finally {
+    global.fetch = originalFetch;
+    restoreEnvironment(previous);
+  }
+});
