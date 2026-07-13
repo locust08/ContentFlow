@@ -9,6 +9,7 @@ import { transcribeAudio } from "../services/openaiClient.js";
 import { generateImagePrompts, generateVideoPrompts } from "../services/promptGenerator.js";
 import { analyzeReference } from "../services/referenceAnalyzer.js";
 import { renderClipperVideo, renderFinalVideo } from "../services/remotionRenderer.js";
+import { renderClipperVariations } from "../services/clipperVariations.js";
 import {
   claimNextSupabaseProductionJob,
   updateSupabaseProductionJob,
@@ -77,6 +78,14 @@ async function recordRenders(project, result) {
   return outputUrl;
 }
 
+async function recordVariationRenders(project, result) {
+  for (const output of result.outputs.filter((item) => item.status === "completed")) {
+    output.outputUrl = await recordRenders(project, { ...output, mode: result.mode });
+  }
+  result.outputUrl = result.outputs.find((item) => item.status === "completed")?.outputUrl || "";
+  return result;
+}
+
 async function processJob(job) {
   const project = job.projectName;
   const payload = job.payload || {};
@@ -143,8 +152,16 @@ async function processJob(job) {
       }
       return { outputs };
     }
-    case "clipper-render-variations":
-      throw new Error("Worker variation rendering is queued but not automated yet; use local dashboard render for this job type.");
+    case "clipper-render-variations": {
+      const result = await renderClipperVariations({
+        project,
+        projectDir,
+        port,
+        cwd: rootDir,
+        reactionIds: payload.reactionIds
+      });
+      return recordVariationRenders(project, result);
+    }
     case "pipeline":
       await analyzeProjectReference(project, payload.frames || 10);
       return generateProjectContent(project, payload.topic);

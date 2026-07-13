@@ -16,6 +16,7 @@ import { buildEditPlan } from "./services/editPlanBuilder.js";
 import { generateSceneImages } from "./services/imageGenerator.js";
 import { generateLibTvUgcVideo, generateLibTvVideos } from "./services/libtvClient.js";
 import { listRenders, renderClipperVideo, renderFinalVideo } from "./services/remotionRenderer.js";
+import { listClipperReactions, renderClipperVariations } from "./services/clipperVariations.js";
 import { generateElevenLabsVoiceover, listAudio } from "./services/elevenLabsClient.js";
 import { transcribeGeneratedVideo } from "./services/subtitlePlanner.js";
 import { analyzeClipperSource, downloadClipperSource, selectClipperHighlight } from "./services/clipperService.js";
@@ -103,10 +104,6 @@ function reactionManifestPath(projectDir) {
   return path.join(projectDir, "clipper", "generated", "reaction-characters.json");
 }
 
-function reactionAssetUrl(project, localPath, absolutePath) {
-  return `/media/${encodeURIComponent(project)}/${localPath.split("/").map(encodeURIComponent).join("/")}?v=${fs.statSync(absolutePath).mtimeMs}`;
-}
-
 function readReactionManifest(projectDir) {
   const manifestPath = reactionManifestPath(projectDir);
   const data = fileExists(manifestPath) ? readJson(manifestPath) : { characters: [] };
@@ -165,40 +162,6 @@ function listCharacterImages(projectDir, project) {
       name: file,
       url: `/media/${encodeURIComponent(project)}/character/${encodeURIComponent(file)}?v=${fs.statSync(path.join(characterDir, file)).mtimeMs}`
     }));
-}
-
-function listClipperReaction(projectDir, project) {
-  const reactionDir = path.join(projectDir, "clipper", "reaction");
-  if (!fs.existsSync(reactionDir)) return [];
-
-  const manifestCharacters = readReactionManifest(projectDir)
-    .filter((character) => character.path && fileExists(path.join(projectDir, character.path)))
-    .map((character) => {
-      const absolutePath = path.join(projectDir, character.path);
-      return {
-        ...character,
-        type: character.type || (/\.(mp4|mov|webm)$/i.test(character.path) ? "video" : "image"),
-        name: character.name || path.basename(character.path),
-        url: reactionAssetUrl(project, character.path, absolutePath)
-      };
-    });
-  const knownPaths = new Set(manifestCharacters.map((character) => character.path));
-
-  const legacyCharacters = fs.readdirSync(reactionDir)
-    .filter((file) => /\.(png|jpg|jpeg|webp|mp4|mov|webm)$/i.test(file))
-    .filter((file) => !knownPaths.has(`clipper/reaction/${file}`))
-    .sort()
-    .map((file, index) => ({
-      id: `legacy-${slugify(path.parse(file).name) || index + 1}`,
-      name: path.parse(file).name,
-      originalName: file,
-      path: `clipper/reaction/${file}`,
-      type: /\.(mp4|mov|webm)$/i.test(file) ? "video" : "image",
-      uploadedAt: "",
-      url: reactionAssetUrl(project, `clipper/reaction/${file}`, path.join(reactionDir, file))
-    }));
-
-  return [...manifestCharacters, ...legacyCharacters];
 }
 
 function clipperSourceUrl(projectDir, project) {
@@ -359,7 +322,7 @@ function getProjectSummary(project) {
     hasClipperTranscript: fileExists(path.join(dir, "clipper", "analysis", "source-transcript.json")),
     hasClipperHighlights: fileExists(path.join(dir, "clipper", "generated", "highlight-candidates.json")),
     hasClipperSelection: fileExists(path.join(dir, "clipper", "generated", "selected-highlight.json")),
-    hasClipperReaction: listClipperReaction(dir, project).length > 0,
+    hasClipperReaction: listClipperReactions(dir, project).length > 0,
     hasClipperRender: fileExists(path.join(dir, "renders", "final-clip.mp4")) || renders.some((render) => render.name.startsWith("clips/")),
     assets: listProjectAssets(dir, project),
     clipCandidates: Array.isArray(highlights?.candidates) ? highlights.candidates : []
@@ -410,7 +373,7 @@ function listProjectAssets(projectDir, project) {
   }
   for (const item of listProductImages(projectDir, project)) pushAsset({ kind: "product-image", name: item.name, localPath: `product/${item.name}`, url: item.url, mediaType: "image" });
   for (const item of listCharacterImages(projectDir, project)) pushAsset({ kind: "character-reference", name: item.name, localPath: `character/${item.name}`, url: item.url, mediaType: "image" });
-  for (const item of listClipperReaction(projectDir, project)) pushAsset({ kind: "reaction-character", name: item.name, localPath: item.path, url: item.url, mediaType: item.type });
+  for (const item of listClipperReactions(projectDir, project)) pushAsset({ kind: "reaction-character", name: item.name, localPath: item.path, url: item.url, mediaType: item.type });
   return assets;
 }
 
@@ -472,7 +435,7 @@ function projectData(project) {
     renders: listRenders(dir, project),
     clipper: {
       sourceUrl: clipperSourceUrl(dir, project),
-      reactions: listClipperReaction(dir, project)
+      reactions: listClipperReactions(dir, project)
     },
     referenceUrl: fileExists(path.join(dir, "reference", "reference.mp4"))
       ? `/media/${encodeURIComponent(project)}/reference/reference.mp4`
@@ -1198,63 +1161,15 @@ async function handleApi(req, res, url) {
       requireEditorAccess(project);
       const body = await readJsonBody(req);
       if (shouldQueueEngine()) return sendJson(res, 202, await createQueuedJob(project, "clipper-render-variations", body));
-      const projectDir = safeProject(project);
-      const selected = jsonOrNull(path.join(projectDir, "clipper", "generated", "selected-highlight.json"));
-      if (!selected) throw new Error("Make one highlight active before rendering character variations.");
-      const reactionIds = Array.isArray(body.reactionIds) ? body.reactionIds : [];
-      const reactions = listClipperReaction(projectDir, project);
-      const reactionMap = new Map(reactions.map((reaction) => [reaction.id, reaction]));
-      const selectedReactions = reactionIds.map((id) => reactionMap.get(id)).filter(Boolean);
-      if (!selectedReactions.length) throw new Error("Select one or more reaction characters before rendering variations.");
-
-      const outputs = [];
-      for (let index = 0; index < selectedReactions.length; index += 1) {
-        const reaction = selectedReactions[index];
-        const rank = String(index + 1).padStart(2, "0");
-        const outputName = `char-${rank}-${slugify(reaction.name || reaction.id)}__clip-${slugify(selected.title || selected.id)}.mp4`;
-        try {
-          const render = await renderClipperVideo({
-            project,
-            port,
-            cwd: rootDir,
-            outputName,
-            outputDir: "renders/clips",
-            reactionAsset: reaction
-          });
-          outputs.push({
-            reactionId: reaction.id,
-            reactionName: reaction.name,
-            highlightId: selected.id,
-            title: selected.title,
-            output: render.output,
-            status: "completed",
-            clipStart: render.clipStart,
-            clipEnd: render.clipEnd
-          });
-        } catch (error) {
-          outputs.push({
-            reactionId: reaction.id,
-            reactionName: reaction.name,
-            highlightId: selected.id,
-            title: selected.title,
-            output: path.join("renders", "clips", outputName).replace(/\\/g, "/"),
-            status: "failed",
-            error: error.message
-          });
-        }
-      }
-      const result = {
-        renderedAt: new Date().toISOString(),
-        mode: "clipper-character-variations",
-        selectedHighlight: selected,
-        count: outputs.length,
-        completed: outputs.filter((output) => output.status === "completed").length,
-        failed: outputs.filter((output) => output.status === "failed").length,
-        outputs
-      };
-      writeJson(path.join(projectDir, "clipper", "generated", "clipper-character-variations-manifest.json"), result);
+      const result = await renderClipperVariations({
+        project,
+        projectDir: safeProject(project),
+        port,
+        cwd: rootDir,
+        reactionIds: body.reactionIds
+      });
       const supabaseWarning = await trySupabaseWrite(() => syncProjectRendersToSupabase(project));
-      return sendJson(res, 200, { ok: true, result, data: projectData(project), supabaseWarning });
+      return sendJson(res, result.failed ? 207 : 200, { ok: result.failed === 0, result, data: projectData(project), supabaseWarning });
     }
 
     if (parts[3] === "clipper" && req.method === "POST" && parts[4] === "render-bulk") {
