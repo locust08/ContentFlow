@@ -1,0 +1,11 @@
+.env
+.env.local
+.git
+.vercel
+node_modules
+projects/**
+!projects/.gitkeep
+_deploy_contentflow_ai
+contentflow-ai-vercel-ready.zip
+_review_frames
+*.log
