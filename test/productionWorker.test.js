@@ -337,6 +337,29 @@ test("records the last persisted progress when a later milestone update rejects"
   assert.equal(updates.at(-1).error, "persistence failed");
 });
 
+test("retains claimed progress when the first worker milestone update rejects", async () => {
+  const updates = [];
+  const worker = createProductionWorker({
+    workerId: "test-worker",
+    workerName: "Test Worker",
+    claimJob: async () => ({ id: "job-1", projectName: "demo", jobType: "pipeline", progress: 10 }),
+    updateJob: async (_id, patch) => {
+      updates.push(patch);
+      if (patch.progress === 25) throw new Error("persistence failed");
+    },
+    updateHeartbeat: async () => {},
+    processJob: async () => {
+      assert.fail("The worker must not process a job whose initial milestone was not persisted.");
+    }
+  });
+
+  await worker.tick();
+
+  assert.equal(updates.at(-1).status, "failed");
+  assert.equal(updates.at(-1).progress, 10);
+  assert.equal(updates.at(-1).error, "persistence failed");
+});
+
 test("coalesces concurrent starts into one initial heartbeat and timer", async () => {
   const timers = [];
   const worker = createProductionWorker({

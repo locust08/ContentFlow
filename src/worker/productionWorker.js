@@ -13,6 +13,7 @@ import { renderClipperVideo, renderFinalVideo } from "../services/remotionRender
 import { renderClipperVariations } from "../services/clipperVariations.js";
 import {
   claimNextSupabaseProductionJob,
+  normalizeProductionJobProgress,
   updateSupabaseProductionJob,
   upsertSupabaseWorkerHeartbeat,
   uploadSupabaseStorageFile,
@@ -293,7 +294,9 @@ export function createProductionWorker({
     }
 
     currentJobId = job.id;
-    let lastPersistedProgress = 0;
+    let lastPersistedProgress = normalizeProductionJobProgress(
+      Object.hasOwn(job, "progress") ? job.progress : 10
+    );
     const persistMilestone = async (patch) => {
       await updateJob(job.id, patch);
       if (Number.isFinite(patch.progress)) lastPersistedProgress = patch.progress;
