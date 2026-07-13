@@ -206,30 +206,36 @@ function renderNavState() {
 }
 
 function showView(viewName = "dashboard") {
-  if (isClientUser() && ["ai-generator-project", "auto-clipper-project"].includes(viewName)) {
+  const projectViews = ["ai-generator-project", "auto-clipper-project"];
+  const managementPages = {
+    dashboard: "#dashboard-page",
+    projects: "#projects-page",
+    clients: "#clients-page",
+    campaigns: "#campaigns-page",
+    team: "#team-page",
+    "media-library": "#media-library",
+    approvals: "#approvals-page",
+    analytics: "#analytics-panel",
+    settings: "#settings-page"
+  };
+  const internalViews = ["ai-generator-project", "auto-clipper-project", "projects", "clients", "campaigns", "team", "production-jobs", "settings"];
+
+  if (isClientUser() && internalViews.includes(viewName)) {
     viewName = "media-library";
   }
   state.activeView = viewName;
   renderNavState();
-  const isProjectView = ["ai-generator-project", "auto-clipper-project"].includes(viewName);
-  const isOverviewView = ["dashboard", "media-library", "analytics"].includes(viewName);
+  const isProjectView = projectViews.includes(viewName);
+  const isManagementPage = Object.prototype.hasOwnProperty.call(managementPages, viewName);
 
-  setSectionVisible("#studio-overview", isOverviewView);
+  setSectionVisible("#studio-overview", isManagementPage);
   setSectionVisible("#workflow-steps", isProjectView && Boolean(state.data));
-  setSectionVisible("#production-jobs-panel", isProjectView && Boolean(state.data));
+  setSectionVisible("#production-jobs-panel", viewName === "production-jobs");
   for (const node of $$(".ai-workflow")) node.hidden = viewName !== "ai-generator-project";
   setSectionVisible("#clipper-generator", viewName === "auto-clipper-project");
 
-  for (const [selector, views] of [
-    ["#studio-overview .overview-grid", ["dashboard"]],
-    ["#client-campaigns", ["dashboard"]],
-    ["#media-review", ["dashboard"]],
-    ["#approval-queue", ["dashboard"]],
-    ["#supabase-panel", ["dashboard"]],
-    ["#media-library", ["media-library"]],
-    ["#analytics-panel", ["analytics"]]
-  ]) {
-    setSectionVisible(selector, views.includes(viewName));
+  for (const [pageView, selector] of Object.entries(managementPages)) {
+    setSectionVisible(selector, pageView === viewName);
   }
 
   const subtitle = $(".hero-subtitle");
@@ -242,6 +248,20 @@ function showView(viewName = "dashboard") {
       subtitle.textContent = "Review final outputs across clients, campaigns, approval states, and rendered media files.";
     } else if (viewName === "analytics") {
       subtitle.textContent = "Monitor production health, approval status, campaign workload, and team output.";
+    } else if (viewName === "projects") {
+      subtitle.textContent = "Manage every AI Generator and Auto Clipper workspace from one structured production page.";
+    } else if (viewName === "clients") {
+      subtitle.textContent = "Register client accounts and keep each campaign relationship organized for review access.";
+    } else if (viewName === "campaigns") {
+      subtitle.textContent = "Group production projects by campaign objective, client, and delivery pipeline.";
+    } else if (viewName === "team") {
+      subtitle.textContent = "View staff, editor, admin, and reviewer roles for assignment and access control.";
+    } else if (viewName === "approvals") {
+      subtitle.textContent = "Track reviewer decisions, client feedback, and approval status across active media outputs.";
+    } else if (viewName === "production-jobs") {
+      subtitle.textContent = "Monitor queued, processing, completed, and failed jobs from the local production worker.";
+    } else if (viewName === "settings") {
+      subtitle.textContent = "Manage the Supabase database bridge and local-to-hosted synchronization settings.";
     } else {
       subtitle.textContent = "Run client campaigns from project assignment to AI-assisted output, review, and production analytics.";
     }
@@ -250,17 +270,38 @@ function showView(viewName = "dashboard") {
   if (!isProjectView) {
     const titles = {
       dashboard: "Dashboard",
+      projects: "Projects",
+      clients: "Clients",
+      campaigns: "Campaigns",
+      team: "Team",
       "media-library": "Media Library",
-      analytics: "Analytics"
+      approvals: "Approvals",
+      analytics: "Analytics",
+      "production-jobs": "Production Jobs",
+      settings: "Settings"
     };
+    const nextActions = {
+      dashboard: { title: "Select or create a project", button: "Create", focus: "#project-name" },
+      projects: { title: "Create or open a project", button: "New Project", focus: "#project-name" },
+      clients: { title: "Register a client", button: "Add Client", focus: "#client-name" },
+      campaigns: { title: "Create a campaign", button: "Add Campaign", focus: "#campaign-name" },
+      team: { title: "Assign staff from project form", button: "Projects", view: "projects" },
+      "media-library": { title: "Review final outputs", button: "Dashboard", view: "dashboard" },
+      approvals: { title: "Review active project", button: "Media Library", view: "media-library" },
+      analytics: { title: "Check production health", button: "Dashboard", view: "dashboard" },
+      "production-jobs": { title: "Refresh worker queue", button: "Refresh", action: () => loadProductionJobs().catch((error) => setStatus(error.message)) },
+      settings: { title: "Sync database records", button: "Sync", action: () => $("#sync-supabase")?.click() }
+    };
+    const action = nextActions[viewName] || nextActions.dashboard;
     setText("#active-title", titles[viewName] || "Dashboard");
-    setText("#next-action-title", viewName === "dashboard" ? "Select or create a project" : "Return to dashboard");
+    setText("#next-action-title", action.title);
     const nextButton = $("#next-action-button");
     if (nextButton) {
-      nextButton.textContent = viewName === "dashboard" ? "Create" : "Dashboard";
+      nextButton.textContent = action.button;
       nextButton.onclick = () => {
-        if (viewName === "dashboard") $("#project-name")?.focus();
-        else showView("dashboard");
+        if (action.action) action.action();
+        else if (action.focus) $(action.focus)?.focus();
+        else showView(action.view || "dashboard");
       };
     }
   }
@@ -270,7 +311,7 @@ function applyRoleVisibility() {
   const role = state.auth.user?.role || (state.auth.required ? "anonymous" : "admin");
   document.body.dataset.role = role;
   setText("#auth-user-label", state.auth.user ? `${state.auth.user.name} · ${state.auth.user.role}` : "Local demo");
-  const adminOnly = ["#project-form", "#folder-form", "#client-campaigns", "#supabase-panel"];
+  const adminOnly = ["#project-form", "#folder-form", "#clients-page", "#campaigns-page", "#team-page", "#settings-page", "[data-nav-view='clients']", "[data-nav-view='campaigns']", "[data-nav-view='team']", "[data-nav-view='production-jobs']", "[data-nav-view='settings']"];
   for (const selector of adminOnly) {
     const node = $(selector);
     if (node) node.hidden = !isAdminUser();
@@ -446,6 +487,93 @@ function renderMediaLibrary() {
     : `<p class="project-meta">Rendered videos and clips appear here after Remotion output is ready.</p>`);
 }
 
+function renderProjectsPage() {
+  setText("#projects-count", `${state.projects.length} projects`);
+  setHTML("#projects-page-list", state.projects.length
+    ? state.projects.map((project) => `
+        <article class="management-item">
+          <div>
+            <p class="eyebrow">${typeLabel(project.type)} · ${project.approvalStatus || "draft"}</p>
+            <h3>${project.name}</h3>
+            <p class="project-meta">${clientName(project.clientId)} · ${campaignName(project.campaignId)}</p>
+            <p class="project-meta">${staffName(project.assignedStaffId)} · ${folderName(project.folderId)} · ${project.priority || "normal"} priority</p>
+          </div>
+          <button type="button" data-project="${project.name}">Open</button>
+        </article>
+      `).join("")
+    : `<p class="project-meta">Create an AI Generator or Auto Clipper project from the sidebar.</p>`);
+}
+
+function renderClientsPage() {
+  const clients = state.organization.clients || [];
+  setText("#clients-count", `${clients.length} clients`);
+  setHTML("#clients-page-list", clients.length
+    ? clients.map((client) => {
+        const projects = state.projects.filter((project) => project.clientId === client.id).length;
+        const campaigns = state.organization.campaigns.filter((campaign) => campaign.clientId === client.id).length;
+        return `
+          <article class="management-item">
+            <div>
+              <p class="eyebrow">${client.industry || "Client"}</p>
+              <h3>${client.name}</h3>
+              <p class="project-meta">${campaigns} campaigns · ${projects} projects</p>
+            </div>
+            <span class="approval-badge approved">active</span>
+          </article>
+        `;
+      }).join("")
+    : `<p class="project-meta">Add a client to start grouping campaigns and review access.</p>`);
+}
+
+function renderCampaignsPage() {
+  const campaigns = state.organization.campaigns || [];
+  setText("#campaigns-count", `${campaigns.length} campaigns`);
+  setHTML("#campaigns-page-list", campaigns.length
+    ? campaigns.map((campaign) => {
+        const projects = state.projects.filter((project) => project.campaignId === campaign.id);
+        const renders = projects.reduce((total, project) => total + Number(project.renderCount || 0), 0);
+        return `
+          <article class="management-item">
+            <div>
+              <p class="eyebrow">${clientName(campaign.clientId)}</p>
+              <h3>${campaign.name}</h3>
+              <p class="project-meta">${campaign.objective || "No objective set"}</p>
+              <p class="project-meta">${projects.length} projects · ${renders} renders</p>
+            </div>
+            <span class="approval-badge queued">campaign</span>
+          </article>
+        `;
+      }).join("")
+    : `<p class="project-meta">Create a campaign after adding a client.</p>`);
+}
+
+function renderTeamPage() {
+  const staff = state.organization.staff || [];
+  setText("#team-count", `${staff.length} users`);
+  setHTML("#team-page-list", staff.length
+    ? staff.map((person) => {
+        const assigned = state.projects.filter((project) => project.assignedStaffId === person.id || project.reviewerId === person.id).length;
+        return `
+          <article class="management-item">
+            <div>
+              <p class="eyebrow">${person.role || "user"}</p>
+              <h3>${person.name}</h3>
+              <p class="project-meta">${person.email || "No email"} · ${assigned} linked projects</p>
+            </div>
+            <span class="approval-badge ${person.role === "manager-client" ? "queued" : "approved"}">${person.role === "manager-client" ? "reviewer" : "internal"}</span>
+          </article>
+        `;
+      }).join("")
+    : `<p class="project-meta">Team users will appear here after Supabase sync or demo seed data is loaded.</p>`);
+}
+
+function renderManagementPages() {
+  renderProjectsPage();
+  renderClientsPage();
+  renderCampaignsPage();
+  renderTeamPage();
+}
+
 function renderProductionJobs() {
   const jobs = state.productionJobs || [];
   setHTML("#production-jobs-list", jobs.length
@@ -619,7 +747,7 @@ function formatTime(seconds) {
 }
 
 function renderWorkspaceMode(type) {
-  if (["dashboard", "media-library", "analytics"].includes(state.activeView)) {
+  if (["dashboard", "projects", "clients", "campaigns", "team", "media-library", "approvals", "analytics", "production-jobs", "settings"].includes(state.activeView)) {
     showView(state.activeView);
     return;
   }
@@ -917,6 +1045,7 @@ async function refreshProjects() {
   renderSupabasePanel();
   renderApprovalQueue();
   renderMediaLibrary();
+  renderManagementPages();
   renderOrganizationControls();
   renderFolders();
   renderProjects();
@@ -1060,6 +1189,7 @@ on("#client-form", "submit", async (event) => {
     $("#client-name").value = "";
     $("#client-industry").value = "";
     renderOrganizationControls();
+    renderManagementPages();
     renderProjects();
     setStatus("Client created");
   } catch (error) {
@@ -1088,6 +1218,7 @@ on("#campaign-form", "submit", async (event) => {
     $("#campaign-name").value = "";
     $("#campaign-objective").value = "";
     renderOrganizationControls();
+    renderManagementPages();
     renderProjects();
     setStatus("Campaign created");
   } catch (error) {
@@ -1243,6 +1374,7 @@ on("#project-list", "click", async (event) => {
       } else {
         renderFolders();
         renderProjects();
+        renderManagementPages();
       }
       setStatus("Project deleted");
     } catch (error) {
@@ -1253,6 +1385,11 @@ on("#project-list", "click", async (event) => {
 
   const openButton = event.target.closest("[data-open-project]");
   if (openButton) selectProject(openButton.dataset.openProject);
+});
+
+on("#projects-page-list", "click", async (event) => {
+  const openButton = event.target.closest("[data-project]");
+  if (openButton) selectProject(openButton.dataset.project);
 });
 
 on("#active-project-folder", "change", async (event) => {

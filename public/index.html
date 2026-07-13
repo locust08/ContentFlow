@@ -23,12 +23,17 @@
 
         <nav class="sidebar-menu" aria-label="Main workspace">
           <a href="#studio-overview" data-nav-view="dashboard">Dashboard</a>
-          <a href="#client-campaigns" data-nav-view="dashboard">Clients & Campaigns</a>
-          <a href="#project-list">Projects</a>
+          <a href="#projects-page" data-nav-view="projects">Projects</a>
+          <a href="#clients-page" data-nav-view="clients">Clients</a>
+          <a href="#campaigns-page" data-nav-view="campaigns">Campaigns</a>
+          <a href="#team-page" data-nav-view="team">Team</a>
           <a href="#source-assets" data-project-shortcut="ai-generator">AI Generator</a>
           <a href="#clipper-generator" data-project-shortcut="auto-clipper">Auto Clipper</a>
           <a href="#media-library" data-nav-view="media-library">Media Library</a>
+          <a href="#approvals-page" data-nav-view="approvals">Approvals</a>
           <a href="#analytics-panel" data-nav-view="analytics">Analytics</a>
+          <a href="#production-jobs-panel" data-nav-view="production-jobs">Production Jobs</a>
+          <a href="#settings-page" data-nav-view="settings">Settings</a>
           <a href="/mobile.html">Mobile Staff</a>
         </nav>
 
@@ -91,96 +96,166 @@
         </header>
 
         <section class="studio-overview" id="studio-overview">
-          <div class="overview-grid">
-            <article class="metric-card">
-              <span>Active Projects</span>
-              <strong id="metric-active-projects">0</strong>
-              <p>Live production workspaces</p>
-            </article>
-            <article class="metric-card">
-              <span>Videos Rendered</span>
-              <strong id="metric-renders">0</strong>
-              <p>Final outputs and clip exports</p>
-            </article>
-            <article class="metric-card">
-              <span>Ready For Review</span>
-              <strong id="metric-review">0</strong>
-              <p>Projects with media output</p>
-            </article>
-            <article class="metric-card">
-              <span>AI / Clipper Split</span>
-              <strong id="metric-split">0 / 0</strong>
-              <p>Generator vs clipping workload</p>
-            </article>
-          </div>
+          <section class="management-page" id="dashboard-page">
+            <div class="overview-grid">
+              <article class="metric-card">
+                <span>Active Projects</span>
+                <strong id="metric-active-projects">0</strong>
+                <p>Live production workspaces</p>
+              </article>
+              <article class="metric-card">
+                <span>Videos Rendered</span>
+                <strong id="metric-renders">0</strong>
+                <p>Final outputs and clip exports</p>
+              </article>
+              <article class="metric-card">
+                <span>Ready For Review</span>
+                <strong id="metric-review">0</strong>
+                <p>Projects with media output</p>
+              </article>
+              <article class="metric-card">
+                <span>AI / Clipper Split</span>
+                <strong id="metric-split">0 / 0</strong>
+                <p>Generator vs clipping workload</p>
+              </article>
+            </div>
 
-          <div class="ops-grid">
-            <section class="panel role-panel" id="client-campaigns">
-              <div class="panel-head">
-                <div>
-                  <p class="eyebrow">Admin workspace</p>
-                  <h3>Clients, Campaigns, Assignments</h3>
+            <div class="ops-grid">
+              <section class="panel role-panel">
+                <div class="panel-head">
+                  <div>
+                    <p class="eyebrow">Workflow map</p>
+                    <h3>From client brief to final approval</h3>
+                  </div>
+                  <span class="mini-state ready">FYP-ready</span>
                 </div>
-                <span class="mini-state ready">FYP module</span>
-              </div>
-              <div class="management-grid">
-                <form id="client-form" class="mini-form">
-                  <label for="client-name">New client</label>
-                  <input id="client-name" placeholder="Client name" autocomplete="off">
-                  <input id="client-industry" placeholder="Industry" autocomplete="off">
-                  <button type="submit">Add Client</button>
-                </form>
-                <form id="campaign-form" class="mini-form">
-                  <label for="campaign-name">New campaign</label>
-                  <select id="campaign-client-select" aria-label="Campaign client"></select>
-                  <input id="campaign-name" placeholder="Campaign name" autocomplete="off">
-                  <input id="campaign-objective" placeholder="Objective" autocomplete="off">
-                  <button type="submit">Add Campaign</button>
-                </form>
-              </div>
-              <div class="flow-lane" id="assignment-flow">
-                <span>Create client</span>
-                <span>Create campaign</span>
-                <span>Assign project</span>
-                <span>Track status</span>
-              </div>
-              <p class="project-meta">This is the management layer that will later connect to Supabase users, clients, campaigns, and staff assignment records.</p>
-            </section>
+                <div class="flow-lane" id="assignment-flow">
+                  <span>Create client</span>
+                  <span>Create campaign</span>
+                  <span>Assign project</span>
+                  <span>Produce media</span>
+                  <span>Review output</span>
+                </div>
+              </section>
 
-            <section class="panel role-panel" id="media-review">
-              <div class="panel-head">
-                <div>
-                  <p class="eyebrow">Manager / Client view</p>
-                  <h3>Media Library and Approval</h3>
+              <section class="panel role-panel">
+                <div class="panel-head">
+                  <div>
+                    <p class="eyebrow">Role access</p>
+                    <h3>Admin, staff, client separation</h3>
+                  </div>
+                  <span class="mini-state">System module</span>
                 </div>
-                <span class="mini-state">Preview</span>
-              </div>
-              <div class="review-cards">
-                <article>
-                  <strong>Final outputs</strong>
-                  <span>UGC videos, highlight clips, subtitled MP4s</span>
-                </article>
-                <article>
-                  <strong>Approval status</strong>
-                  <span>Pending, approved, request changes</span>
-                </article>
-                <article>
-                  <strong>Campaign visibility</strong>
-                  <span>Client sees only their campaign media and analytics</span>
-                </article>
-              </div>
-              <div class="approval-actions">
-                <textarea id="approval-feedback" placeholder="Reviewer/client feedback for the active project"></textarea>
-                <div class="actions">
-                  <button id="submit-for-review" type="button">Submit Active Project</button>
-                  <button id="approve-project" type="button">Approve</button>
-                  <button id="request-changes" type="button">Request Changes</button>
+                <div class="review-cards">
+                  <article>
+                    <strong>Admin</strong>
+                    <span>Clients, campaigns, projects, assignments, analytics</span>
+                  </article>
+                  <article>
+                    <strong>Staff / Editor</strong>
+                    <span>Assigned production projects and media creation</span>
+                  </article>
+                  <article>
+                    <strong>Manager / Client</strong>
+                    <span>Final media library, approvals, campaign analytics</span>
+                  </article>
                 </div>
-              </div>
-            </section>
-          </div>
+              </section>
+            </div>
+          </section>
 
-          <section class="panel analytics-panel" id="analytics-panel">
+          <section class="management-page panel" id="projects-page">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Projects</p>
+                <h3>Production Workspaces</h3>
+              </div>
+              <span class="mini-state ready" id="projects-count">0 projects</span>
+            </div>
+            <div class="management-list" id="projects-page-list"></div>
+          </section>
+
+          <section class="management-page panel" id="clients-page">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Clients</p>
+                <h3>Client Accounts</h3>
+              </div>
+              <span class="mini-state ready" id="clients-count">0 clients</span>
+            </div>
+            <div class="management-grid">
+              <form id="client-form" class="mini-form">
+                <label for="client-name">New client</label>
+                <input id="client-name" placeholder="Client name" autocomplete="off">
+                <input id="client-industry" placeholder="Industry" autocomplete="off">
+                <button type="submit">Add Client</button>
+              </form>
+              <div class="management-list" id="clients-page-list"></div>
+            </div>
+          </section>
+
+          <section class="management-page panel" id="campaigns-page">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Campaigns</p>
+                <h3>Campaign Management</h3>
+              </div>
+              <span class="mini-state ready" id="campaigns-count">0 campaigns</span>
+            </div>
+            <div class="management-grid">
+              <form id="campaign-form" class="mini-form">
+                <label for="campaign-name">New campaign</label>
+                <select id="campaign-client-select" aria-label="Campaign client"></select>
+                <input id="campaign-name" placeholder="Campaign name" autocomplete="off">
+                <input id="campaign-objective" placeholder="Objective" autocomplete="off">
+                <button type="submit">Add Campaign</button>
+              </form>
+              <div class="management-list" id="campaigns-page-list"></div>
+            </div>
+          </section>
+
+          <section class="management-page panel" id="team-page">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Team</p>
+                <h3>Staff and Reviewer Directory</h3>
+              </div>
+              <span class="mini-state ready" id="team-count">0 users</span>
+            </div>
+            <div class="management-list" id="team-page-list"></div>
+          </section>
+
+          <section class="management-page panel media-library-panel" id="media-library">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Media Library</p>
+                <h3>Final Outputs Across Campaigns</h3>
+              </div>
+              <span class="mini-state ready" id="media-count">0 files</span>
+            </div>
+            <div class="media-library-grid" id="media-library-grid"></div>
+          </section>
+
+          <section class="management-page panel approval-panel" id="approvals-page">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Approvals</p>
+                <h3>Reviewer / Client Actions</h3>
+              </div>
+              <span class="mini-state" id="approval-count">0 pending</span>
+            </div>
+            <div class="approval-actions">
+              <textarea id="approval-feedback" placeholder="Reviewer/client feedback for the active project"></textarea>
+              <div class="actions">
+                <button id="submit-for-review" type="button">Submit Active Project</button>
+                <button id="approve-project" type="button">Approve</button>
+                <button id="request-changes" type="button">Request Changes</button>
+              </div>
+            </div>
+            <div class="approval-list" id="approval-list"></div>
+          </section>
+
+          <section class="management-page panel analytics-panel" id="analytics-panel">
             <div class="panel-head">
               <div>
                 <p class="eyebrow">Analytics</p>
@@ -198,14 +273,14 @@
               <span style="height: 64%"></span>
             </div>
             <div class="analytics-grid" id="analytics-breakdown"></div>
-            <p class="project-meta">Current values are calculated from local projects. In the FYP-ready version, this will query Supabase for campaign output, staff productivity, approval rate, and monthly content volume.</p>
+            <p class="project-meta">Current values are calculated from local projects and Supabase where configured.</p>
           </section>
 
-          <section class="panel" id="supabase-panel">
+          <section class="management-page panel" id="settings-page">
             <div class="panel-head">
               <div>
-                <p class="eyebrow">Database Backend</p>
-                <h3>Supabase PostgreSQL</h3>
+                <p class="eyebrow">Settings</p>
+                <h3>Database Backend</h3>
               </div>
               <span class="mini-state" id="supabase-state">Checking</span>
             </div>
@@ -215,28 +290,6 @@
               <button id="sync-supabase" type="button">Sync Local Records</button>
             </div>
             <p class="project-meta">This connects the local prototype to the structured DBMS layer required by the FYP proposal.</p>
-          </section>
-
-          <section class="panel approval-panel" id="approval-queue">
-            <div class="panel-head">
-              <div>
-                <p class="eyebrow">Approval queue</p>
-                <h3>Reviewer / Client Actions</h3>
-              </div>
-              <span class="mini-state" id="approval-count">0 pending</span>
-            </div>
-            <div class="approval-list" id="approval-list"></div>
-          </section>
-
-          <section class="panel media-library-panel" id="media-library">
-            <div class="panel-head">
-              <div>
-                <p class="eyebrow">Media Library</p>
-                <h3>Final Outputs Across Campaigns</h3>
-              </div>
-              <span class="mini-state ready" id="media-count">0 files</span>
-            </div>
-            <div class="media-library-grid" id="media-library-grid"></div>
           </section>
         </section>
 

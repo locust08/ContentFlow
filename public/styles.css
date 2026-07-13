@@ -569,6 +569,15 @@ select {
   margin-bottom: 28px;
 }
 
+.management-page {
+  display: grid;
+  gap: 14px;
+}
+
+.management-page[hidden] {
+  display: none;
+}
+
 .overview-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -651,6 +660,31 @@ select {
 
 .management-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.management-list {
+  display: grid;
+  gap: 10px;
+}
+
+.management-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid rgba(23, 19, 10, 0.1);
+  border-radius: 12px;
+  padding: 14px;
+  background: rgba(255, 252, 242, 0.86);
+}
+
+.management-item h3,
+.management-item p {
+  margin: 0;
+}
+
+.management-item .approval-badge {
+  justify-self: end;
 }
 
 .mini-form {
@@ -1341,6 +1375,14 @@ video {
   .studio-hero {
     min-height: auto;
     grid-template-columns: 1fr;
+  }
+
+  .management-item {
+    grid-template-columns: 1fr;
+  }
+
+  .management-item .approval-badge {
+    justify-self: start;
   }
 
   .hero-actions,
