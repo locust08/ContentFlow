@@ -89,11 +89,12 @@ export async function deliverVariationOutputs({
   uploadFile = uploadSupabaseStorageFile,
   persistRender = upsertSupabaseRenderJob
 }) {
+  const projectDir = projectPathFor(project);
   for (const output of result.outputs.filter((item) => item.status === "completed")) {
     let stage = "upload";
     try {
       const outputUrl = await uploadFile(
-        path.join(projectPathFor(project), output.output),
+        path.join(projectDir, output.output),
         `projects/${project}/${output.output}`
       );
       if (!outputUrl) throw new Error("storage upload did not return a public URL");
@@ -119,6 +120,7 @@ export async function deliverVariationOutputs({
   result.completed = result.outputs.filter((item) => item.status === "completed").length;
   result.failed = result.outputs.filter((item) => item.status === "failed").length;
   result.outputUrl = result.outputs.find((item) => item.status === "completed")?.outputUrl || "";
+  writeJson(path.join(projectDir, "clipper", "generated", "clipper-character-variations-manifest.json"), result);
   return result;
 }
 

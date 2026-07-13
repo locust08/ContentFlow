@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import { deliverVariationOutputs, runWorkerTick } from "../src/worker/productionWorker.js";
 
@@ -56,6 +59,32 @@ test("continues variation delivery after a render-row persistence failure", asyn
   assert.match(result.outputs[0].error, /persistence failed: database offline/i);
   assert.equal(result.outputs[1].outputUrl, "https://storage/two.mp4");
   assert.deepEqual(persisted.map((render) => render.name), ["clips/two.mp4"]);
+});
+
+test("writes final delivery outcomes to the variation manifest", async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "contentflow-worker-manifest-"));
+  const projectDir = path.join(root, "demo");
+  const manifestPath = path.join(projectDir, "clipper", "generated", "clipper-character-variations-manifest.json");
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const result = variationResult();
+  fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
+  fs.writeFileSync(manifestPath, JSON.stringify(result));
+
+  await deliverVariationOutputs({
+    project: "demo",
+    result,
+    projectPathFor: () => projectDir,
+    uploadFile: async (_localPath, storagePath) => {
+      if (storagePath.endsWith("one.mp4")) throw new Error("storage offline");
+      return "https://storage/two.mp4";
+    },
+    persistRender: async () => ({ skipped: false })
+  });
+
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  assert.equal(manifest.failed, 1);
+  assert.match(manifest.outputs[0].error, /upload failed: storage offline/i);
+  assert.equal(manifest.outputs[1].outputUrl, "https://storage/two.mp4");
 });
 
 test("marks a partial variation job failed and persists its complete result", async () => {
