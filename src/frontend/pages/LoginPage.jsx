@@ -13,6 +13,7 @@ export function LoginPage({ app }) {
   return (
     <main className="login-screen">
       <form className="login-card" onSubmit={submit}>
+        <img className="login-logo" src="/assets/brand/contentflow-bee.png" alt="ContentFlow AI" />
         <p className="eyebrow">Supabase Auth</p>
         <h1>ContentFlow AI</h1>
         <p>Login with your Admin, Staff, or Client account to open the correct workspace.</p>

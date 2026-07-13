@@ -21,7 +21,7 @@ import { CreateProjectModal } from "./components/CreateProjectModal.jsx";
 import { canAccessPath, getLandingPath, getProjectPath } from "./routing/routes.js";
 
 function LoadingScreen() {
-  return <main className="loading-screen"><div className="loading-card"><span className="brand-mark">CF</span><div><strong>Loading ContentFlow AI</strong><small>Preparing your workspace</small></div></div></main>;
+  return <main className="loading-screen"><div className="loading-card"><img className="brand-symbol" src="/assets/brand/contentflow-bee.png" alt="" /><div><strong>Loading ContentFlow AI</strong><small>Preparing your workspace</small></div></div></main>;
 }
 
 function Protected({ app, children }) {

@@ -1,10 +1,12 @@
-const CACHE_NAME = "contentflow-mobile-v2";
+const CACHE_NAME = "contentflow-mobile-v3";
 const APP_SHELL = [
   "/mobile.html",
-  "/mobile.css?v=holographic-apple-1",
-  "/mobile.js?v=holographic-apple-1",
+  "/mobile.css?v=studio-bee-1",
+  "/mobile.js?v=studio-bee-1",
   "/manifest.webmanifest",
-  "/icon.svg",
+  "/favicon-32.png",
+  "/assets/brand/contentflow-bee.png",
+  "/assets/brand/contentflow-bee-192.png",
   "/assets/brand/contentflow-holographic.webp"
 ];
 

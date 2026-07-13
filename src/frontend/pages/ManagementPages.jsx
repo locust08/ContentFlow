@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Check, ChevronDown, CirclePlus, Database, Folder, FolderPlus, MoreHorizontal,
   Pencil, Search, ShieldCheck, Trash2, UploadCloud, X
@@ -29,7 +29,8 @@ function ConfirmDialog({ title, body, confirmLabel = "Delete", onCancel, onConfi
 
 export function ProjectsPage({ app }) {
   const navigate = useNavigate();
-  const [query, setQuery] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [query, setQuery] = useState(searchParams.get("search") || "");
   const [folderId, setFolderId] = useState("");
   const [newFolder, setNewFolder] = useState("");
   const [deleteTarget, setDeleteTarget] = useState("");
@@ -54,7 +55,7 @@ export function ProjectsPage({ app }) {
         {app.folders.map((folder) => editingFolder === folder.id ? <form key={folder.id} className="folder-edit-form" onSubmit={async (event) => { event.preventDefault(); if (!editingName.trim()) return; await app.renameFolder(folder.id, editingName.trim()); setEditingFolder(null); }}><input aria-label={`Rename ${folder.name}`} value={editingName} onChange={(event) => setEditingName(event.target.value)} /><button aria-label="Save folder name"><Check size={14} /></button><button type="button" aria-label="Cancel rename" onClick={() => setEditingFolder(null)}><X size={14} /></button></form> : <div className="folder-row" key={folder.id}><button className={folderId === folder.id ? "active" : ""} onClick={() => setFolderId(folder.id)}><span>{folder.name}</span><small>{app.projects.filter((project) => project.folderId === folder.id).length}</small></button>{app.isAdmin && <span className="folder-row__actions"><button aria-label={`Rename ${folder.name}`} title="Rename folder" onClick={() => { setEditingFolder(folder.id); setEditingName(folder.name); }}><Pencil size={13} /></button><button aria-label={`Delete folder ${folder.name}`} title="Delete folder" onClick={() => setDeleteFolderTarget(folder)}><Trash2 size={13} /></button></span>}</div>)}
         {app.isAdmin && <form className="new-folder-form" onSubmit={addFolder}><input aria-label="Folder name" value={newFolder} onChange={(event) => setNewFolder(event.target.value)} placeholder="New folder" /><button aria-label="Create folder" disabled={!newFolder.trim()}><FolderPlus size={16} /></button></form>}
       </aside>
-      <Card className="project-table-panel" action={<SearchField value={query} onChange={setQuery} placeholder="Search projects" />}>
+      <Card className="project-table-panel" action={<SearchField value={query} onChange={(value) => { setQuery(value); setSearchParams(value ? { search: value } : {}, { replace: true }); }} placeholder="Search projects" />}>
         <div className="table-wrap"><table className="data-table"><thead><tr><th>Project</th><th>Client / campaign</th><th>Owner</th><th>Status</th><th>Folder</th><th aria-label="Actions" /></tr></thead><tbody>
           {projects.map((project) => <tr key={project.name}>
             <td><button className="project-name-button" onClick={() => navigate(getProjectPath(project))}><span className={`type-dot type-dot--${project.type === "auto-clipper" ? "clipper" : "ai"}`} /><span><strong>{project.name}</strong><small>{typeLabel(project.type)}</small></span></button></td>

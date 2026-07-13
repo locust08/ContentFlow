@@ -54,7 +54,7 @@ export function Sidebar({ app }) {
   return (
     <aside className="app-sidebar">
       <NavLink className="brand-lockup" to={app.isClient ? "/media" : "/studio"} aria-label="ContentFlow AI home">
-        <span className="brand-mark">CF</span>
+        <img className="brand-symbol" src="/assets/brand/contentflow-bee.png" alt="" />
         <span className="brand-copy">
           <strong>ContentFlow AI</strong>
           <small>Digital Bee production OS</small>

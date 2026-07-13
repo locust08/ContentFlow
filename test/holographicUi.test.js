@@ -11,8 +11,8 @@ const mobileHtml = fs.readFileSync(path.join(root, "public", "mobile.html"), "ut
 const serviceWorker = fs.readFileSync(path.join(root, "public", "sw.js"), "utf8");
 const asset = path.join(root, "public", "assets", "brand", "contentflow-holographic.webp");
 
-test("web UI defines the Apple-style holographic visual system", () => {
-  assert.match(tokens, /--font:\s*-apple-system,\s*BlinkMacSystemFont,\s*"SF Pro Text",\s*"SF Pro Display"/);
+test("web UI defines the Inter and Apple-compatible holographic visual system", () => {
+  assert.match(tokens, /--font:\s*"Inter Variable",\s*Inter,\s*-apple-system,\s*BlinkMacSystemFont,\s*"SF Pro Text",\s*"SF Pro Display"/);
   assert.match(tokens, /--motion-standard:/);
   assert.match(tokens, /--motion-emphasized:/);
   assert.match(glass, /contentflow-holographic\.webp/);
@@ -29,8 +29,8 @@ test("standalone mobile UI shares the holographic system with reduced motion", (
   assert.match(mobile, /@keyframes mobile-page-enter/);
   assert.match(mobile, /@media\s*\(prefers-reduced-motion:\s*reduce\)/);
   assert.match(mobile, /min-height:\s*44px/);
-  assert.match(mobileHtml, /mobile\.css\?v=holographic-apple-1/);
-  assert.match(mobileHtml, /mobile\.js\?v=holographic-apple-1/);
-  assert.match(serviceWorker, /contentflow-mobile-v2/);
+  assert.match(mobileHtml, /mobile\.css\?v=studio-bee-1/);
+  assert.match(mobileHtml, /mobile\.js\?v=studio-bee-1/);
+  assert.match(serviceWorker, /contentflow-mobile-v3/);
   assert.match(serviceWorker, /contentflow-holographic\.webp/);
 });

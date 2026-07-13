@@ -6,8 +6,8 @@
 .sidebar-scrim { display: none; }
 
 .brand-lockup { display: flex; align-items: center; gap: 10px; min-width: 0; margin: 2px 4px 22px; }
-.brand-mark { width: 38px; height: 38px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 8px; color: var(--ink); background: var(--yellow); font-weight: 900; font-size: 13px; }
-.brand-mark--small { width: 28px; height: 28px; font-size: 10px; }
+.brand-symbol { width: 42px; height: 42px; flex: 0 0 auto; object-fit: contain; }
+.brand-symbol--small { width: 30px; height: 30px; }
 .brand-copy { min-width: 0; display: grid; line-height: 1.15; }
 .brand-copy strong { font-size: 14px; }
 .brand-copy small { margin-top: 3px; overflow: hidden; color: var(--muted); font-size: 10px; white-space: nowrap; text-overflow: ellipsis; }
@@ -30,10 +30,22 @@
 .sidebar-user strong { font-size: 12px; }
 .sidebar-user small { color: var(--muted); font-size: 10px; text-transform: capitalize; }
 
-.topbar { height: 58px; position: sticky; top: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 24px; border-bottom: 1px solid var(--line); background: rgba(255, 255, 255, 0.94); backdrop-filter: blur(16px); }
+.topbar { height: 58px; position: sticky; top: 0; z-index: 20; display: grid; grid-template-columns: minmax(180px, .7fr) minmax(260px, 1.35fr) minmax(220px, .8fr); align-items: center; gap: 18px; padding: 0 24px; border-bottom: 1px solid var(--line); background: rgba(255, 255, 255, 0.94); backdrop-filter: blur(16px); }
 .topbar__brand { display: none; align-items: center; gap: 9px; }
 .topbar__actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .topbar__menu { display: none !important; }
+.topbar__greeting { min-width: 0; display: flex; align-items: center; gap: 10px; color: #43434a; font-size: 12px; font-weight: 560; }
+.topbar__greeting span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.topbar-search { position: relative; min-width: 0; display: flex; align-items: center; }
+.topbar-search > svg { position: absolute; left: 14px; color: var(--muted); pointer-events: none; }
+.topbar-search input { min-height: 40px; padding: 0 76px 0 42px; border-color: rgba(255,255,255,.72); background: rgba(255,255,255,.52); box-shadow: 0 1px 0 rgba(255,255,255,.85) inset; }
+.topbar-search kbd { position: absolute; right: 12px; display: inline-flex; align-items: center; gap: 3px; color: var(--faint); font-family: var(--font); font-size: 10px; }
+.notification-menu { position: relative; }
+.notification-dot { position: absolute; top: 7px; right: 7px; width: 6px; height: 6px; border: 1px solid #fff; border-radius: 50%; background: var(--red); }
+.notification-popover { position: absolute; top: calc(100% + 10px); right: 0; width: 230px; display: grid; gap: 6px; padding: 14px; border: 1px solid var(--glass-edge); border-radius: 8px; background: var(--glass-strong); box-shadow: var(--glass-shadow); backdrop-filter: blur(22px); }
+.notification-popover span { color: var(--muted); font-size: 11px; }
+.notification-popover button { justify-self: start; border: 0; padding: 4px 0; color: #725800; background: transparent; font-weight: 750; }
+.avatar-button { width: 38px; height: 38px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.76); border-radius: 8px; color: #34343a; background: rgba(255,255,255,.52); font-size: 11px; font-weight: 780; box-shadow: 0 1px 0 rgba(255,255,255,.86) inset; }
 
 .page-heading, .workspace-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; min-height: 84px; }
 .page-heading h1, .workspace-heading h1 { margin: 0 0 6px; font-size: clamp(26px, 3vw, 38px); line-height: 1.08; letter-spacing: 0; }
@@ -57,12 +69,16 @@
   .sidebar-scrim { position: fixed; inset: 0; z-index: 25; border: 0; background: rgba(21,21,21,.38); }
   .sidebar-open .sidebar-scrim { display: block; }
   .topbar__menu, .topbar__brand { display: flex !important; }
+  .topbar { grid-template-columns: auto minmax(0,1fr) auto; }
+  .topbar__greeting, .topbar-search { display: none; }
   .page-frame { padding: 22px 18px 110px; }
 }
 
 @media (max-width: 560px) {
   .page-frame { padding-inline: 12px; }
   .topbar { padding-inline: 12px; }
-  .status-pill { max-width: 130px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .topbar__brand { min-width: 0; }
+  .topbar__brand strong { overflow: hidden; font-size: 12px; white-space: nowrap; text-overflow: ellipsis; }
+  .topbar__actions .status-pill { display: none; }
   .page-heading, .workspace-heading { align-items: flex-start; flex-direction: column; gap: 14px; }
 }

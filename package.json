@@ -22,6 +22,7 @@
     "node": ">=20"
   },
   "dependencies": {
+    "@fontsource-variable/inter": "^5.2.8",
     "@remotion/cli": "4.0.489",
     "@remotion/media": "4.0.489",
     "lucide-react": "^1.24.0",
