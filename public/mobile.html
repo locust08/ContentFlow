@@ -3,114 +3,131 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#f7b801">
+    <meta name="theme-color" content="#FFD21F">
     <title>ContentFlow Mobile</title>
     <link rel="manifest" href="/manifest.webmanifest">
-    <link rel="stylesheet" href="/mobile.css">
+    <link rel="stylesheet" href="/mobile.css?v=daylight-glass-1">
   </head>
   <body>
     <main class="mobile-shell">
-      <header class="mobile-hero">
-        <div>
-          <p class="eyebrow">ContentFlow AI</p>
-          <h1>Staff Studio</h1>
-          <p>Assigned projects, asset uploads, media preview, and review status from phone.</p>
-        </div>
-        <div class="mobile-links">
-          <a class="admin-link" href="/">Admin</a>
-          <button id="mobile-logout" type="button">Logout</button>
+      <header class="mobile-header">
+        <a class="brand" href="/" aria-label="ContentFlow home">
+          <span class="brand-mark" aria-hidden="true">CF</span>
+          <span><strong>ContentFlow</strong><small>Digital Bee production OS</small></span>
+        </a>
+        <div class="header-actions">
+          <a class="icon-button admin-link" href="/" aria-label="Open admin workspace" title="Admin workspace"><span aria-hidden="true">&#8599;</span></a>
+          <button class="icon-button" id="mobile-logout" type="button" aria-label="Log out" title="Log out"><span aria-hidden="true">&#8594;</span></button>
         </div>
       </header>
 
-      <section class="panel identity-panel" id="mobile-identity-panel">
-        <label for="staff-select">Staff identity</label>
-        <select id="staff-select"></select>
-      </section>
-
-      <section class="status-strip" aria-label="Mobile module status">
-        <article>
-          <span id="metric-assigned">0</span>
-          <strong>Assigned</strong>
-        </article>
-        <article>
-          <span id="metric-review">0</span>
-          <strong>Review</strong>
-        </article>
-        <article>
-          <span id="metric-renders">0</span>
-          <strong>Renders</strong>
-        </article>
-      </section>
-
-      <section class="panel">
-        <div class="section-head">
-          <div>
-            <p class="eyebrow">Queue</p>
-            <h2>My Projects</h2>
-          </div>
-          <button id="refresh-mobile" type="button">Refresh</button>
+      <section class="mobile-title-row" aria-live="polite">
+        <div>
+          <p class="eyebrow">Staff workspace</p>
+          <h1 id="mobile-view-title">Projects</h1>
         </div>
-        <div class="project-feed" id="mobile-projects"></div>
+        <button class="icon-button refresh-button" id="refresh-mobile" type="button" aria-label="Refresh workspace" title="Refresh"><span aria-hidden="true">&#8635;</span></button>
       </section>
 
-      <section class="panel project-detail" id="project-detail" hidden>
-        <div class="section-head">
-          <div>
-            <p class="eyebrow" id="detail-type">Project</p>
-            <h2 id="detail-title">Select a project</h2>
+      <section class="mobile-view" data-mobile-view="projects">
+        <section class="status-strip" aria-label="Project status">
+          <article><span id="metric-assigned">0</span><strong>Assigned</strong></article>
+          <article><span id="metric-review">0</span><strong>In review</strong></article>
+          <article><span id="metric-renders">0</span><strong>Renders</strong></article>
+        </section>
+
+        <section class="panel project-panel">
+          <div class="section-head">
+            <div><p class="eyebrow">Task queue</p><h2>Assigned projects</h2></div>
           </div>
-          <span class="status-pill" id="detail-status">Draft</span>
-        </div>
-
-        <div class="detail-grid" id="detail-meta"></div>
-
-        <section class="mobile-block" id="ai-upload-block">
-          <h3>AI Generator Assets</h3>
-          <label>Reference video <input id="mobile-reference-file" type="file" accept="video/mp4,video/*"></label>
-          <button id="mobile-upload-reference" type="button">Upload Reference</button>
-          <label>Product image <input id="mobile-product-file" type="file" accept="image/png,image/jpeg,image/webp,image/avif"></label>
-          <button id="mobile-upload-product" type="button">Upload Product</button>
-          <label>Character image <input id="mobile-character-file" type="file" accept="image/png,image/jpeg,image/webp,image/avif"></label>
-          <button id="mobile-upload-character" type="button">Upload Character</button>
+          <div class="project-feed" id="mobile-projects"></div>
         </section>
 
-        <section class="mobile-block" id="clipper-upload-block">
-          <h3>Auto Clipper Assets</h3>
-          <label>Reaction characters <input id="mobile-reaction-file" type="file" multiple accept="image/png,image/jpeg,image/webp,image/avif,video/mp4,video/quicktime,video/webm"></label>
-          <button id="mobile-upload-reaction" type="button">Upload Reaction</button>
-        </section>
-
-        <section class="mobile-block">
-          <div class="section-head compact">
-            <div>
-              <p class="eyebrow">Media</p>
-              <h3>Preview Outputs</h3>
-            </div>
+        <section class="panel project-detail" id="project-detail" hidden>
+          <div class="section-head">
+            <div><p class="eyebrow" id="detail-type">Project</p><h2 id="detail-title">Select a project</h2></div>
+            <span class="status-pill" id="detail-status">Draft</span>
           </div>
-          <div class="media-feed" id="mobile-media"></div>
+          <div class="detail-grid" id="detail-meta"></div>
+          <section class="mobile-block">
+            <div class="section-head compact"><div><p class="eyebrow">Media</p><h3>Preview outputs</h3></div></div>
+            <div class="media-feed" id="mobile-media"></div>
+          </section>
         </section>
+      </section>
 
-        <section class="mobile-block">
-          <h3>Review Status</h3>
-          <select id="mobile-approval-status">
+      <section class="mobile-view" data-mobile-view="uploads" hidden>
+        <section class="panel task-context" id="upload-project-context">
+          <p class="eyebrow">Working on</p>
+          <h2 id="upload-project-name">Select a project from Projects</h2>
+          <p id="upload-project-meta">Files are attached to the active project.</p>
+        </section>
+        <section class="panel upload-panel">
+          <section class="mobile-block first-block" id="ai-upload-block">
+            <div><p class="eyebrow">AI generator</p><h2>Reference assets</h2></div>
+            <label>Reference video <input id="mobile-reference-file" data-project-required type="file" accept="video/mp4,video/*"></label>
+            <button id="mobile-upload-reference" data-project-required type="button">Upload reference</button>
+            <label>Product image <input id="mobile-product-file" data-project-required type="file" accept="image/png,image/jpeg,image/webp,image/avif"></label>
+            <button id="mobile-upload-product" data-project-required type="button">Upload product</button>
+            <label>Character image <input id="mobile-character-file" data-project-required type="file" accept="image/png,image/jpeg,image/webp,image/avif"></label>
+            <button id="mobile-upload-character" data-project-required type="button">Upload character</button>
+          </section>
+          <section class="mobile-block" id="clipper-upload-block">
+            <div><p class="eyebrow">Auto clipper</p><h2>Reaction assets</h2></div>
+            <label>Reaction characters <input id="mobile-reaction-file" data-project-required type="file" multiple accept="image/png,image/jpeg,image/webp,image/avif,video/mp4,video/quicktime,video/webm"></label>
+            <button id="mobile-upload-reaction" data-project-required type="button">Upload reaction</button>
+          </section>
+        </section>
+      </section>
+
+      <section class="mobile-view" data-mobile-view="reviews" hidden>
+        <section class="panel task-context" id="review-project-context">
+          <p class="eyebrow">Reviewing</p>
+          <h2 id="review-project-name">Select a project from Projects</h2>
+          <p id="review-project-meta">Set the status and leave clear feedback.</p>
+        </section>
+        <section class="panel review-panel">
+          <label for="mobile-approval-status">Review status</label>
+          <select id="mobile-approval-status" data-project-required>
             <option value="draft">Draft</option>
             <option value="in-review">In review</option>
             <option value="changes-requested">Changes requested</option>
             <option value="approved">Approved</option>
           </select>
-          <textarea id="mobile-approval-feedback" placeholder="Add staff/client feedback"></textarea>
-          <button id="mobile-save-review" type="button">Save Review Status</button>
+          <label for="mobile-approval-feedback">Feedback</label>
+          <textarea id="mobile-approval-feedback" data-project-required placeholder="Add staff or client feedback"></textarea>
+          <button id="mobile-save-review" data-project-required type="button">Save review</button>
         </section>
       </section>
 
-      <p class="mobile-toast" id="mobile-status">Ready</p>
+      <section class="mobile-view" data-mobile-view="profile" hidden>
+        <section class="panel profile-panel">
+          <div class="profile-icon" aria-hidden="true">&#9673;</div>
+          <p class="eyebrow">Signed in as</p>
+          <h2 id="mobile-profile-name">Staff member</h2>
+          <p id="mobile-profile-role">Assigned project access</p>
+        </section>
+        <section class="panel identity-panel" id="mobile-identity-panel">
+          <label for="staff-select">Demo staff identity</label>
+          <select id="staff-select"></select>
+        </section>
+      </section>
+
+      <p class="mobile-toast" id="mobile-status" role="status">Ready</p>
     </main>
+
+    <nav class="mobile-nav" aria-label="Staff workspace">
+      <button data-view="projects" type="button" aria-current="page"><span aria-hidden="true">&#9638;</span><strong>Projects</strong></button>
+      <button data-view="uploads" type="button"><span aria-hidden="true">&#8679;</span><strong>Uploads</strong></button>
+      <button data-view="reviews" type="button"><span aria-hidden="true">&#10003;</span><strong>Reviews</strong></button>
+      <button data-view="profile" type="button"><span aria-hidden="true">&#9673;</span><strong>Profile</strong></button>
+    </nav>
 
     <section class="mobile-auth" id="mobile-auth" hidden>
       <form class="panel auth-card" id="mobile-auth-form">
         <p class="eyebrow">Supabase Auth</p>
         <h2>Login</h2>
-        <p class="empty">Staff and clients see only their assigned ContentFlow projects.</p>
+        <p class="empty">Staff and clients see only their authorized ContentFlow projects.</p>
         <input id="mobile-auth-email" type="email" placeholder="email@digitalbee.ai" autocomplete="email">
         <input id="mobile-auth-password" type="password" placeholder="Password" autocomplete="current-password">
         <button type="submit">Login</button>
@@ -118,6 +135,6 @@
       </form>
     </section>
 
-    <script src="/mobile.js" type="module"></script>
+    <script src="/mobile.js?v=daylight-glass-1" type="module"></script>
   </body>
 </html>
