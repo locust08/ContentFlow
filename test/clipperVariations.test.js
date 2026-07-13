@@ -191,6 +191,32 @@ test("downloads a hosted reaction reference when the worker has no local copy", 
   assert.equal(manifest.characters.some((character) => character.id === "hosted-r-1"), true);
 });
 
+test("repairs a stale reaction manifest when its local file is missing", async (t) => {
+  const { root, projectDir } = makeProject();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.rmSync(path.join(projectDir, "clipper", "reaction", "maya.png"));
+
+  const result = await renderClipperVariations({
+    project: "demo",
+    projectDir,
+    reactionIds: ["r-1"],
+    reactionAssets: [{
+      id: "r-1",
+      name: "Maya",
+      localPath: "clipper/reaction/maya.png",
+      url: "https://media.example.test/maya.png",
+      mediaType: "image"
+    }],
+    fetchImpl: async () => new Response(new Uint8Array([4, 5, 6]), { status: 200 }),
+    renderClip: async ({ outputName, reactionAsset }) => {
+      assert.equal(fs.existsSync(path.join(projectDir, reactionAsset.path)), true);
+      return { output: `renders/clips/${outputName}`, clipStart: 4, clipEnd: 34 };
+    }
+  });
+
+  assert.equal(result.completed, 1);
+});
+
 test("rejects rendering without an active highlight or matching reaction", async (t) => {
   const { root, projectDir } = makeProject();
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));

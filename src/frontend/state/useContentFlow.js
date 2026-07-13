@@ -3,6 +3,28 @@ import { api, loadAuthConfig, loadProfile, signIn, signOut } from "../api/client
 
 const emptyOrganization = { clients: [], campaigns: [], staff: [] };
 
+export function uploadCompletionStatus(result) {
+  return result?.supabaseWarning ? "Upload saved; Supabase sync needs attention" : "Upload complete";
+}
+
+export async function uploadHostedReaction({ project, file, apiCall = api, fetchImpl = globalThis.fetch }) {
+  const projectUrl = `/api/projects/${encodeURIComponent(project)}/clipper/reaction`;
+  const prepared = await apiCall(`${projectUrl}/upload-url`, {
+    method: "POST",
+    body: JSON.stringify({ fileName: file.name, contentType: file.type || "application/octet-stream", size: file.size })
+  });
+  const uploaded = await fetchImpl(prepared.uploadUrl, {
+    method: "PUT",
+    headers: { "Content-Type": prepared.upload?.contentType || file.type || "application/octet-stream" },
+    body: file
+  });
+  if (!uploaded.ok) throw new Error(`Direct reaction upload failed (${uploaded.status}).`);
+  return apiCall(`${projectUrl}/complete`, {
+    method: "POST",
+    body: JSON.stringify({ upload: prepared.upload })
+  });
+}
+
 export function useContentFlow() {
   const [state, setState] = useState({
     loading: true,
@@ -186,9 +208,12 @@ export function useContentFlow() {
 
   const syncSupabase = useCallback(async () => {
     setStatus("Synchronizing local records");
-    await api("/api/supabase/sync-local", { method: "POST" });
+    const result = await api("/api/supabase/sync-local", { method: "POST" });
     await loadCore();
-    setStatus("Supabase synchronized");
+    const failures = result?.result?.assetSync?.failures || [];
+    setStatus(failures.length
+      ? `Supabase synchronized with ${failures.length} asset warning${failures.length === 1 ? "" : "s"}`
+      : "Supabase synchronized");
   }, [loadCore, setStatus]);
 
   const updateProjectMeta = useCallback(async (project, payload) => {
@@ -225,15 +250,17 @@ export function useContentFlow() {
   const uploadProjectFile = useCallback(async (path, file, status) => {
     if (!state.activeProject) throw new Error("Select a project first.");
     setStatus(status || "Uploading");
-    await api(`/api/projects/${encodeURIComponent(state.activeProject)}${path}`, {
-      method: "POST",
-      body: await file.arrayBuffer(),
-      headers: { "Content-Type": file.type || "application/octet-stream", "x-file-name": file.name }
-    });
+    const result = path === "/clipper/reaction" && state.auth.config?.hostedDemo
+      ? await uploadHostedReaction({ project: state.activeProject, file })
+      : await api(`/api/projects/${encodeURIComponent(state.activeProject)}${path}`, {
+        method: "POST",
+        body: await file.arrayBuffer(),
+        headers: { "Content-Type": file.type || "application/octet-stream", "x-file-name": file.name }
+      });
     await loadCore();
     await selectProject(state.activeProject);
-    setStatus("Upload complete");
-  }, [loadCore, selectProject, setStatus, state.activeProject]);
+    setStatus(uploadCompletionStatus(result));
+  }, [loadCore, selectProject, setStatus, state.activeProject, state.auth.config?.hostedDemo]);
 
   const derived = useMemo(() => ({
     role,

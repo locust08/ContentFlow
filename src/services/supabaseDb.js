@@ -162,65 +162,77 @@ export async function upsertSupabaseCampaign(campaign) {
   return { skipped: false };
 }
 
+export function buildSupabaseProjectUpsert(project) {
+  const hasSelectedHighlight = Object.hasOwn(project, "selectedHighlightId");
+  return {
+    text: `
+      insert into cf_projects (
+        name, type, folder_id, client_id, campaign_id, assigned_staff_id, reviewer_id,
+        priority, approval_status, approval_feedback, selected_highlight_id, local_path, created_at, updated_at
+      )
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, now())
+      on conflict (name) do update set
+        type = excluded.type,
+        folder_id = excluded.folder_id,
+        client_id = excluded.client_id,
+        campaign_id = excluded.campaign_id,
+        assigned_staff_id = excluded.assigned_staff_id,
+        reviewer_id = excluded.reviewer_id,
+        priority = excluded.priority,
+        approval_status = excluded.approval_status,
+        approval_feedback = excluded.approval_feedback,
+        selected_highlight_id = case when $14 then excluded.selected_highlight_id else cf_projects.selected_highlight_id end,
+        local_path = excluded.local_path,
+        updated_at = now()
+    `,
+    values: [
+      project.name,
+      project.type || "ai-generator",
+      project.folderId || null,
+      project.clientId || null,
+      project.campaignId || null,
+      project.assignedStaffId || null,
+      project.reviewerId || null,
+      project.priority || "normal",
+      project.approvalStatus || "draft",
+      project.approvalFeedback || null,
+      project.selectedHighlightId || null,
+      `projects/${project.name}`,
+      safeDate(project.createdAt),
+      hasSelectedHighlight
+    ]
+  };
+}
+
 export async function upsertSupabaseProject(project) {
+  const hasSelectedHighlight = Object.hasOwn(project, "selectedHighlightId");
   if (hostedRestMode()) {
+    const body = {
+      name: project.name,
+      type: project.type || "ai-generator",
+      folder_id: project.folderId || null,
+      client_id: project.clientId || null,
+      campaign_id: project.campaignId || null,
+      assigned_staff_id: project.assignedStaffId || null,
+      reviewer_id: project.reviewerId || null,
+      priority: project.priority || "normal",
+      approval_status: project.approvalStatus || "draft",
+      approval_feedback: project.approvalFeedback || null,
+      local_path: `projects/${project.name}`,
+      created_at: safeDate(project.createdAt),
+      updated_at: new Date().toISOString()
+    };
+    if (hasSelectedHighlight) body.selected_highlight_id = project.selectedHighlightId || null;
     const [row] = await restRequest("cf_projects?on_conflict=name", {
       method: "POST",
       headers: { Prefer: "resolution=merge-duplicates,return=representation" },
-      body: {
-        name: project.name,
-        type: project.type || "ai-generator",
-        folder_id: project.folderId || null,
-        client_id: project.clientId || null,
-        campaign_id: project.campaignId || null,
-        assigned_staff_id: project.assignedStaffId || null,
-        reviewer_id: project.reviewerId || null,
-        priority: project.priority || "normal",
-        approval_status: project.approvalStatus || "draft",
-        approval_feedback: project.approvalFeedback || null,
-        selected_highlight_id: project.selectedHighlightId || null,
-        local_path: `projects/${project.name}`,
-        created_at: safeDate(project.createdAt),
-        updated_at: new Date().toISOString()
-      }
+      body
     });
     return row || { skipped: false };
   }
   if (!await ensureSupabaseReady()) return { skipped: true };
-  await getPool().query(`
-    insert into cf_projects (
-      name, type, folder_id, client_id, campaign_id, assigned_staff_id, reviewer_id,
-      priority, approval_status, approval_feedback, selected_highlight_id, local_path, created_at, updated_at
-    )
-    values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, now())
-    on conflict (name) do update set
-      type = excluded.type,
-      folder_id = excluded.folder_id,
-      client_id = excluded.client_id,
-      campaign_id = excluded.campaign_id,
-      assigned_staff_id = excluded.assigned_staff_id,
-      reviewer_id = excluded.reviewer_id,
-      priority = excluded.priority,
-      approval_status = excluded.approval_status,
-      approval_feedback = excluded.approval_feedback,
-      selected_highlight_id = excluded.selected_highlight_id,
-      local_path = excluded.local_path,
-      updated_at = now()
-  `, [
-    project.name,
-    project.type || "ai-generator",
-    project.folderId || null,
-    project.clientId || null,
-    project.campaignId || null,
-    project.assignedStaffId || null,
-    project.reviewerId || null,
-    project.priority || "normal",
-    project.approvalStatus || "draft",
-    project.approvalFeedback || null,
-    project.selectedHighlightId || null,
-    `projects/${project.name}`,
-    safeDate(project.createdAt)
-  ]);
+  const query = buildSupabaseProjectUpsert(project);
+  await getPool().query(query.text, query.values);
   return { skipped: false };
 }
 
@@ -570,6 +582,22 @@ export async function recordSupabaseApprovalEvent({ projectName, status, feedbac
 }
 
 export async function upsertSupabaseAsset(projectName, asset) {
+  if (hostedRestMode()) {
+    const [row] = await restRequest("cf_assets?on_conflict=id", {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates,return=representation" },
+      body: {
+        id: asset.id,
+        project_name: projectName,
+        kind: asset.kind,
+        name: asset.name,
+        media_type: asset.mediaType || null,
+        local_path: asset.localPath || null,
+        url: asset.url || null
+      }
+    });
+    return row || { skipped: false };
+  }
   if (!projectName || !asset?.id || !await ensureSupabaseReady()) return { skipped: true };
   await getPool().query(`
     insert into cf_assets (id, project_name, kind, name, media_type, local_path, url, created_at)
@@ -579,7 +607,11 @@ export async function upsertSupabaseAsset(projectName, asset) {
       name = excluded.name,
       media_type = excluded.media_type,
       local_path = excluded.local_path,
-      url = excluded.url
+      url = case
+        when excluded.url ~* '^https?://' then excluded.url
+        when cf_assets.url ~* '^https?://' then cf_assets.url
+        else excluded.url
+      end
   `, [asset.id, projectName, asset.kind, asset.name, asset.mediaType || null, asset.localPath || null, asset.url || null]);
   return { skipped: false };
 }
@@ -1208,28 +1240,139 @@ function contentTypeForPath(filePath) {
   return "application/octet-stream";
 }
 
-export async function uploadSupabaseStorageFile(localPath, storagePath, {
+function storageObjectPath(storagePath) {
+  const segments = storagePath.split(/[\\/]+/).filter(Boolean);
+  if (!segments.length || segments.some((segment) => segment === "." || segment === "..")) throw new Error("Invalid Supabase Storage path.");
+  return segments.map(encodeURIComponent).join("/");
+}
+
+export function supabasePublicStorageUrl(storagePath, {
+  bucket = value("SUPABASE_STORAGE_BUCKET") || "contentflow-media"
+} = {}) {
+  const baseUrl = supabasePublicUrl();
+  if (!baseUrl) return "";
+  return `${baseUrl}/storage/v1/object/public/${bucket}/${storageObjectPath(storagePath)}`;
+}
+
+export async function createSupabaseSignedUploadUrl(storagePath, {
   bucket = value("SUPABASE_STORAGE_BUCKET") || "contentflow-media"
 } = {}) {
   const baseUrl = supabasePublicUrl();
   const serviceKey = value("SUPABASE_SERVICE_ROLE_KEY");
-  if (!baseUrl || !serviceKey || !fs.existsSync(localPath)) return "";
-  const cleanPath = storagePath.split(/[\\/]+/).map(encodeURIComponent).join("/");
+  if (!baseUrl || !serviceKey) throw new Error("Supabase Storage is not configured.");
+  const cleanPath = storageObjectPath(storagePath);
+  const storageApiUrl = `${baseUrl}/storage/v1`;
+  const response = await fetch(`${storageApiUrl}/object/upload/sign/${bucket}/${cleanPath}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${serviceKey}`,
+      apikey: serviceKey,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ allowOverwrite: false })
+  });
+  const text = await response.text();
+  let data = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = { message: text };
+  }
+  if (!response.ok) throw new Error(`Supabase signed upload URL failed: ${response.status} ${data.message || text}`);
+  const signedPath = String(data.url || "");
+  if (!signedPath) throw new Error("Supabase did not return a signed upload URL.");
+  return {
+    uploadUrl: signedPath.startsWith("http") ? signedPath : `${storageApiUrl}${signedPath.startsWith("/") ? "" : "/"}${signedPath}`,
+    storagePath,
+    publicUrl: supabasePublicStorageUrl(storagePath, { bucket })
+  };
+}
+
+export async function verifySupabaseStorageObject(storagePath, {
+  bucket = value("SUPABASE_STORAGE_BUCKET") || "contentflow-media"
+} = {}) {
+  const baseUrl = supabasePublicUrl();
+  const serviceKey = value("SUPABASE_SERVICE_ROLE_KEY");
+  if (!baseUrl || !serviceKey) throw new Error("Supabase Storage is not configured.");
+  const response = await fetch(`${baseUrl}/storage/v1/object/${bucket}/${storageObjectPath(storagePath)}`, {
+    method: "HEAD",
+    headers: { Authorization: `Bearer ${serviceKey}`, apikey: serviceKey }
+  });
+  if (!response.ok) throw new Error(`Uploaded reaction could not be verified in Supabase Storage (${response.status}).`);
+  return {
+    size: Number(response.headers.get("content-length") || 0),
+    contentType: String(response.headers.get("content-type") || "").split(";", 1)[0].toLowerCase()
+  };
+}
+
+export async function readSupabaseStoragePrefix(storagePath, {
+  bucket = value("SUPABASE_STORAGE_BUCKET") || "contentflow-media",
+  byteCount = 32
+} = {}) {
+  const baseUrl = supabasePublicUrl();
+  const serviceKey = value("SUPABASE_SERVICE_ROLE_KEY");
+  if (!baseUrl || !serviceKey) throw new Error("Supabase Storage is not configured.");
+  const response = await fetch(`${baseUrl}/storage/v1/object/${bucket}/${storageObjectPath(storagePath)}`, {
+    headers: {
+      Authorization: `Bearer ${serviceKey}`,
+      apikey: serviceKey,
+      Range: `bytes=0-${Math.max(0, Number(byteCount || 32) - 1)}`
+    }
+  });
+  if (!response.ok && response.status !== 206) throw new Error(`Uploaded reaction signature could not be read (${response.status}).`);
+  return Buffer.from(await response.arrayBuffer());
+}
+
+export async function uploadSupabaseStorageFile(localPath, storagePath, {
+  bucket = value("SUPABASE_STORAGE_BUCKET") || "contentflow-media"
+} = {}) {
+  if (!fs.existsSync(localPath)) return "";
+  return uploadSupabaseStorageBuffer(fs.readFileSync(localPath), storagePath, {
+    bucket,
+    contentType: contentTypeForPath(localPath)
+  });
+}
+
+export async function uploadSupabaseStorageBuffer(buffer, storagePath, {
+  bucket = value("SUPABASE_STORAGE_BUCKET") || "contentflow-media",
+  contentType = "application/octet-stream"
+} = {}) {
+  const baseUrl = supabasePublicUrl();
+  const serviceKey = value("SUPABASE_SERVICE_ROLE_KEY");
+  if (!baseUrl || !serviceKey || !buffer?.length) return "";
+  const cleanPath = storageObjectPath(storagePath);
   const response = await fetch(`${baseUrl}/storage/v1/object/${bucket}/${cleanPath}`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${serviceKey}`,
       apikey: serviceKey,
-      "Content-Type": contentTypeForPath(localPath),
+      "Content-Type": contentType,
       "x-upsert": "true"
     },
-    body: fs.readFileSync(localPath)
+    body: buffer
   });
   if (!response.ok) {
     const text = await response.text();
     throw new Error(`Supabase Storage upload failed: ${response.status} ${text}`);
   }
-  return `${baseUrl}/storage/v1/object/public/${bucket}/${cleanPath}`;
+  return supabasePublicStorageUrl(storagePath, { bucket });
+}
+
+export async function uploadSupabaseProjectAsset(projectName, projectDir, asset) {
+  if (!projectName || !projectDir || !asset?.localPath) return asset;
+  if (asset.kind !== "reaction-character") return asset;
+  const projectRoot = path.resolve(projectDir);
+  const absolutePath = path.resolve(projectRoot, asset.localPath);
+  const relativePath = path.relative(projectRoot, absolutePath);
+  if (!relativePath || relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+    throw new Error(`Asset path must stay inside project ${projectName}.`);
+  }
+  if (!fs.existsSync(absolutePath)) throw new Error(`Project asset is missing: ${asset.localPath}`);
+  const normalizedPath = relativePath.split(path.sep).join("/");
+  const storagePath = path.posix.join("projects", projectName, "assets", normalizedPath);
+  const url = await uploadSupabaseStorageFile(absolutePath, storagePath);
+  if (!url) throw new Error(`Supabase Storage is not configured for ${asset.name || asset.localPath}.`);
+  return { ...asset, url };
 }
 
 export async function syncLocalSnapshotToSupabase({ organization, projects, mediaItems }) {

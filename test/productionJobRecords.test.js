@@ -227,3 +227,94 @@ test("records claimed and completed production job audit events with attempt met
     restoreEnvironment(previous);
   }
 });
+
+test("hosted project upserts preserve an omitted highlight selection and allow explicit clearing", async () => {
+  const db = await import("../src/services/supabaseDb.js");
+  const previous = {
+    HOSTED_DEMO: process.env.HOSTED_DEMO,
+    SUPABASE_URL: process.env.SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY
+  };
+  const originalFetch = global.fetch;
+  const bodies = [];
+  process.env.HOSTED_DEMO = "true";
+  process.env.SUPABASE_URL = "https://project.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-test";
+  global.fetch = async (_url, options = {}) => {
+    const body = JSON.parse(options.body);
+    bodies.push(body);
+    return new Response(JSON.stringify([body]), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+
+  try {
+    await db.upsertSupabaseProject({ name: "demo", type: "auto-clipper" });
+    await db.upsertSupabaseProject({ name: "demo", type: "auto-clipper", selectedHighlightId: "" });
+    assert.equal(Object.hasOwn(bodies[0], "selected_highlight_id"), false);
+    assert.equal(Object.hasOwn(bodies[1], "selected_highlight_id"), true);
+    assert.equal(bodies[1].selected_highlight_id, null);
+  } finally {
+    global.fetch = originalFetch;
+    restoreEnvironment(previous);
+  }
+});
+
+test("direct project upserts distinguish omitted, replaced, and cleared highlight selections", async () => {
+  const db = await import("../src/services/supabaseDb.js");
+  const omitted = db.buildSupabaseProjectUpsert({ name: "demo" });
+  const replaced = db.buildSupabaseProjectUpsert({ name: "demo", selectedHighlightId: "highlight-4" });
+  const cleared = db.buildSupabaseProjectUpsert({ name: "demo", selectedHighlightId: "" });
+
+  assert.match(omitted.text, /case when \$14 then excluded\.selected_highlight_id else cf_projects\.selected_highlight_id end/);
+  assert.equal(omitted.values[10], null);
+  assert.equal(omitted.values[13], false);
+  assert.equal(replaced.values[10], "highlight-4");
+  assert.equal(replaced.values[13], true);
+  assert.equal(cleared.values[10], null);
+  assert.equal(cleared.values[13], true);
+});
+
+test("uploads project assets to a worker-reachable Supabase Storage URL", async (t) => {
+  const db = await import("../src/services/supabaseDb.js");
+  const root = fs.mkdtempSync(path.join(process.cwd(), "tmp-asset-sync-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const localPath = path.join(root, "clipper", "reaction", "maya.png");
+  fs.mkdirSync(path.dirname(localPath), { recursive: true });
+  fs.writeFileSync(localPath, "maya");
+  const previous = {
+    SUPABASE_URL: process.env.SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY
+  };
+  const originalFetch = global.fetch;
+  let uploadCount = 0;
+  process.env.SUPABASE_URL = "https://project.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-test";
+  global.fetch = async () => {
+    uploadCount += 1;
+    return new Response(JSON.stringify({ Key: "ok" }), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+
+  try {
+    const asset = await db.uploadSupabaseProjectAsset("demo", root, {
+      id: "demo:reaction-character:r-1",
+      kind: "reaction-character",
+      name: "Maya",
+      localPath: "clipper/reaction/maya.png",
+      url: "/media/demo/clipper/reaction/maya.png",
+      mediaType: "image"
+    });
+    assert.equal(asset.url, "https://project.supabase.co/storage/v1/object/public/contentflow-media/projects/demo/assets/clipper/reaction/maya.png");
+    const privateSource = await db.uploadSupabaseProjectAsset("demo", root, {
+      id: "demo:clipper-source:source-video.mp4",
+      kind: "clipper-source",
+      name: "source-video.mp4",
+      localPath: "clipper/source/source-video.mp4",
+      url: "/media/demo/clipper/source/source-video.mp4",
+      mediaType: "video/mp4"
+    });
+    assert.equal(privateSource.url, "/media/demo/clipper/source/source-video.mp4");
+    assert.equal(uploadCount, 1);
+  } finally {
+    global.fetch = originalFetch;
+    restoreEnvironment(previous);
+  }
+});

@@ -26,13 +26,17 @@ async function materializeHostedReactions({ projectDir, reactionAssets, fetchImp
   const manifestPath = reactionManifestPath(projectDir);
   const manifest = fileExists(manifestPath) ? readJson(manifestPath) : { characters: [] };
   const characters = Array.isArray(manifest.characters) ? [...manifest.characters] : [];
-  const knownIds = new Set(characters.map((character) => character.id));
   const reactionDir = path.join(projectDir, "clipper", "reaction");
   ensureDir(reactionDir);
 
   for (const reference of references) {
-    if (!reference?.id || knownIds.has(reference.id)) continue;
-    const requestedName = path.basename(reference.localPath || new URL(reference.url).pathname || `${slugify(reference.id)}.bin`);
+    if (!reference?.id) continue;
+    const existingIndex = characters.findIndex((character) => character.id === reference.id);
+    const existing = existingIndex >= 0 ? characters[existingIndex] : null;
+    if (existing?.path && fileExists(path.join(projectDir, existing.path))) continue;
+
+    const remotePath = /^https?:\/\//i.test(reference.url || "") ? new URL(reference.url).pathname : "";
+    const requestedName = path.basename(reference.localPath || remotePath || `${slugify(reference.id)}.bin`);
     const extension = path.extname(requestedName).toLowerCase();
     if (!/^\.(png|jpg|jpeg|webp|mp4|mov|webm)$/.test(extension)) throw new Error(`Unsupported hosted reaction type for ${reference.name || reference.id}.`);
     const localName = `hosted-${slugify(reference.id)}${extension}`;
@@ -46,15 +50,16 @@ async function materializeHostedReactions({ projectDir, reactionAssets, fetchImp
       if (bytes.length > 100 * 1024 * 1024) throw new Error(`Hosted reaction ${reference.name || reference.id} exceeds 100 MB.`);
       fs.writeFileSync(absolutePath, bytes);
     }
-    characters.push({
+    const character = {
       id: reference.id,
       name: reference.name || path.parse(localName).name,
       originalName: requestedName,
       path: localPath,
       type: /\.(mp4|mov|webm)$/i.test(extension) ? "video" : "image",
       uploadedAt: new Date().toISOString()
-    });
-    knownIds.add(reference.id);
+    };
+    if (existingIndex >= 0) characters.splice(existingIndex, 1, character);
+    else characters.push(character);
   }
 
   ensureDir(path.dirname(manifestPath));

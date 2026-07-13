@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import http from "node:http";
+import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { fileURLToPath, URL } from "node:url";
 import { loadEnv, projectPath, projectsDir, rootDir } from "./config.js";
 import { createFolder, createProject, deleteFolder, deleteProject, getProjectMeta, readFolders, renameFolder, updateProjectMeta } from "./services/project.js";
@@ -23,6 +24,7 @@ import { analyzeClipperSource, downloadClipperSource, selectClipperHighlight } f
 import { buildProductionJob, canCancelProductionJob, canRetryProductionJob, productionJobSummary, workerHealth } from "./services/productionJobs.js";
 import {
   cancelSupabaseProductionJob,
+  createSupabaseSignedUploadUrl,
   createSupabaseProductionJob,
   deleteSupabaseProject,
   getSupabaseProductionJob,
@@ -35,18 +37,22 @@ import {
   listSupabaseWorkerHeartbeats,
   recordSupabaseApprovalEvent,
   recordSupabaseActivityEvent,
+  readSupabaseStoragePrefix,
   retrySupabaseProductionJob,
   setSupabaseWorkerHeartbeatStatus,
   supabaseAnalytics,
   supabaseProjectData,
+  supabasePublicStorageUrl,
   supabaseStatus,
   syncLocalSnapshotToSupabase,
+  uploadSupabaseProjectAsset,
   upsertSupabaseAsset,
   upsertSupabaseCampaign,
   upsertSupabaseClipCandidates,
   upsertSupabaseClient,
   upsertSupabaseProject,
-  upsertSupabaseRenderJob
+  upsertSupabaseRenderJob,
+  verifySupabaseStorageObject
 } from "./services/supabaseDb.js";
 import { ensureDir, fileExists, readJson, writeJson } from "./utils/files.js";
 import { run } from "./utils/exec.js";
@@ -220,6 +226,81 @@ function detectVideoType(buffer, fileName = "") {
   }
   if (buffer[0] === 0x1a && buffer[1] === 0x45 && buffer[2] === 0xdf && buffer[3] === 0xa3) return { ext: ".webm", mime: "video/webm" };
   return null;
+}
+
+const hostedReactionTypes = {
+  ".png": { ext: ".png", mime: "image/png", mediaType: "image" },
+  ".jpg": { ext: ".jpg", mime: "image/jpeg", mediaType: "image" },
+  ".jpeg": { ext: ".jpg", mime: "image/jpeg", mediaType: "image" },
+  ".webp": { ext: ".webp", mime: "image/webp", mediaType: "image" },
+  ".mp4": { ext: ".mp4", mime: "video/mp4", mediaType: "video" },
+  ".mov": { ext: ".mov", mime: "video/quicktime", mediaType: "video" },
+  ".webm": { ext: ".webm", mime: "video/webm", mediaType: "video" }
+};
+
+function prepareHostedReactionDescriptor(project, { fileName, contentType, size }) {
+  const requestedName = path.basename(String(fileName || "").replace(/\\/g, "/"));
+  const detected = hostedReactionTypes[path.extname(requestedName).toLowerCase()];
+  if (!detected) throw new Error("Unsupported reaction asset. Upload PNG, JPG, WEBP, MP4, MOV, or WEBM.");
+  const byteSize = Number(size || 0);
+  if (!Number.isFinite(byteSize) || byteSize <= 0) throw new Error("Reaction asset size is required.");
+  if (byteSize > 50 * 1024 * 1024) throw new Error("Reaction asset exceeds the 50 MB hosted upload limit.");
+  const suppliedType = String(contentType || "").toLowerCase();
+  if (suppliedType && suppliedType !== "application/octet-stream" && suppliedType !== detected.mime) throw new Error("Reaction file type does not match its extension.");
+  const displayName = path.parse(requestedName).name.slice(0, 100) || "reaction-character";
+  const baseName = `${Date.now()}-${slugify(displayName)}-${randomUUID().slice(0, 8)}`;
+  const reactionId = `char-${baseName}`;
+  const localPath = `clipper/reaction/${baseName}${detected.ext}`;
+  return signHostedReactionDescriptor({
+    reactionId,
+    displayName,
+    localPath,
+    storagePath: path.posix.join("projects", project, "assets", localPath),
+    mediaType: detected.mediaType,
+    contentType: detected.mime,
+    size: byteSize,
+    expiresAt: Date.now() + (2 * 60 * 60 * 1000)
+  });
+}
+
+function normalizedHostedReactionDescriptor(upload) {
+  return {
+    reactionId: String(upload?.reactionId || ""),
+    displayName: String(upload?.displayName || ""),
+    localPath: String(upload?.localPath || ""),
+    storagePath: String(upload?.storagePath || ""),
+    mediaType: String(upload?.mediaType || ""),
+    contentType: String(upload?.contentType || "").toLowerCase(),
+    size: Number(upload?.size || 0),
+    expiresAt: Number(upload?.expiresAt || 0)
+  };
+}
+
+function hostedReactionSignature(descriptor) {
+  const secret = String(process.env.SUPABASE_SERVICE_ROLE_KEY || "");
+  if (!secret) throw new Error("Supabase Storage signing is not configured.");
+  return createHmac("sha256", secret).update(JSON.stringify(normalizedHostedReactionDescriptor(descriptor))).digest("base64url");
+}
+
+function signHostedReactionDescriptor(descriptor) {
+  return { ...descriptor, signature: hostedReactionSignature(descriptor) };
+}
+
+function validateHostedReactionDescriptor(project, supplied) {
+  const upload = normalizedHostedReactionDescriptor(supplied);
+  const expectedSignature = Buffer.from(hostedReactionSignature(upload));
+  const suppliedSignature = Buffer.from(String(supplied?.signature || ""));
+  if (expectedSignature.length !== suppliedSignature.length || !timingSafeEqual(expectedSignature, suppliedSignature)) throw new Error("Hosted reaction upload signature is invalid.");
+  if (upload.expiresAt <= Date.now()) throw new Error("Hosted reaction upload approval has expired.");
+  const localPath = upload.localPath;
+  const fileName = path.posix.basename(localPath);
+  const detected = hostedReactionTypes[path.posix.extname(fileName).toLowerCase()];
+  const expectedReactionId = `char-${path.posix.parse(fileName).name}`;
+  const expectedStoragePath = path.posix.join("projects", project, "assets", localPath);
+  if (localPath !== `clipper/reaction/${fileName}` || !detected || upload.reactionId !== expectedReactionId || upload.storagePath !== expectedStoragePath || upload.mediaType !== detected.mediaType || upload.contentType !== detected.mime || upload.size <= 0 || upload.size > 50 * 1024 * 1024) {
+    throw new Error("Invalid hosted reaction upload metadata.");
+  }
+  return { ...upload, displayName: upload.displayName.slice(0, 100) || "reaction-character" };
 }
 
 async function saveImageAsset(buffer, dir, baseName) {
@@ -504,7 +585,11 @@ function projectData(project) {
 
 async function trySupabaseWrite(task) {
   try {
-    await task();
+    const result = await task();
+    if (Array.isArray(result?.failures) && result.failures.length) {
+      const first = result.failures[0];
+      return `${result.failures.length} Supabase asset sync failure${result.failures.length === 1 ? "" : "s"}: ${first.error}`;
+    }
     return null;
   } catch (error) {
     return error.message;
@@ -524,9 +609,18 @@ function recordApprovalActivity(recordActivity, projectName, status, feedback = 
 
 async function syncProjectAssetsToSupabase(project) {
   const projectDir = safeProject(project);
+  let synced = 0;
+  const failures = [];
   for (const asset of listProjectAssets(projectDir, project)) {
-    await upsertSupabaseAsset(project, asset);
+    try {
+      const hostedAsset = await uploadSupabaseProjectAsset(project, projectDir, asset);
+      await upsertSupabaseAsset(project, hostedAsset);
+      synced += 1;
+    } catch (error) {
+      failures.push({ assetId: asset.id, kind: asset.kind, error: error.message });
+    }
   }
+  return { synced, failures };
 }
 
 async function syncProjectRendersToSupabase(project) {
@@ -793,6 +887,41 @@ async function handleApi(req, res, url) {
       }
 
       if (parts[3] === "clipper" && req.method === "POST") {
+        if (parts[4] === "reaction" && parts[5] === "upload-url" && parts.length === 6) {
+          await requireHostedEditorAccess(project);
+          const upload = prepareHostedReactionDescriptor(project, await readJsonBody(req));
+          const signed = await createSupabaseSignedUploadUrl(upload.storagePath);
+          return sendJson(res, 201, { ok: true, uploadUrl: signed.uploadUrl, upload });
+        }
+        if (parts[4] === "reaction" && parts[5] === "complete" && parts.length === 6) {
+          await requireHostedEditorAccess(project);
+          const body = await readJsonBody(req);
+          const upload = validateHostedReactionDescriptor(project, body.upload);
+          const stored = await verifySupabaseStorageObject(upload.storagePath);
+          if (stored.size !== upload.size || stored.contentType !== upload.contentType) throw new Error("Uploaded reaction size or content type does not match the approved upload.");
+          const prefix = await readSupabaseStoragePrefix(upload.storagePath);
+          const detectedImage = detectProductImageType(prefix);
+          const detectedVideo = detectedImage ? null : detectVideoType(prefix, upload.localPath);
+          const detected = detectedImage || detectedVideo;
+          if (!detected || detected.mime !== upload.contentType || (detectedImage ? "image" : "video") !== upload.mediaType) {
+            throw new Error("Uploaded reaction file signature does not match the approved file type.");
+          }
+          const url = supabasePublicStorageUrl(upload.storagePath);
+          await upsertSupabaseAsset(project, {
+            id: `${project}:reaction-character:${upload.reactionId}`,
+            kind: "reaction-character",
+            name: upload.displayName,
+            localPath: upload.localPath,
+            url,
+            mediaType: upload.mediaType
+          });
+          recordActivity("asset.uploaded", project, "Reaction asset uploaded", { assetKind: "reaction-character" });
+          const data = await supabaseProjectData(project);
+          return sendJson(res, 200, { ok: true, character: data?.clipper?.reactions?.find((reaction) => reaction.id === upload.reactionId) || null, data });
+        }
+        if (parts[4] === "reaction" && parts.length === 5) {
+          throw Object.assign(new Error("Hosted reaction uploads must use the signed direct-upload flow."), { status: 413 });
+        }
         const clipperMap = {
           "source-link": "clipper-source-link",
           "analyze": "clipper-analyze",
@@ -871,12 +1000,19 @@ async function handleApi(req, res, url) {
 
   if (req.method === "POST" && url.pathname === "/api/supabase/sync-local") {
     requireAdmin();
+    const projects = allProjects();
     const result = await syncLocalSnapshotToSupabase({
       organization: readOrganization(),
-      projects: allProjects(),
+      projects,
       mediaItems: mediaLibrary()
     });
-    return sendJson(res, 200, { ok: true, result, status: await supabaseStatus() });
+    const assetSync = { synced: 0, failures: [] };
+    for (const project of projects) {
+      const projectResult = await syncProjectAssetsToSupabase(project.name);
+      assetSync.synced += projectResult.synced;
+      assetSync.failures.push(...projectResult.failures.map((failure) => ({ project: project.name, ...failure })));
+    }
+    return sendJson(res, 200, { ok: true, result: { ...result, assetSync }, status: await supabaseStatus() });
   }
 
   if (req.method === "GET" && url.pathname === "/api/supabase/analytics") {

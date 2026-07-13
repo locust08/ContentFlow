@@ -28,6 +28,7 @@ async function withCommandCenter(run) {
   const originalFetch = global.fetch;
   const events = [];
   const requests = [];
+  const storage = { failUploads: false, objects: new Map() };
   const jobs = [
     {
       id: "failed-job",
@@ -95,6 +96,30 @@ async function withCommandCenter(run) {
       return profile ? json({ id: profile.auth_user_id, email: profile.email }) : json({ message: "Unauthorized" }, 401);
     }
 
+    if (url.pathname.startsWith("/storage/v1/object/")) {
+      if (storage.failUploads) return json({ message: "Storage unavailable" }, 503);
+      const signedPrefix = "/storage/v1/object/upload/sign/contentflow-media/";
+      const objectPrefix = "/storage/v1/object/contentflow-media/";
+      if (url.pathname.startsWith(signedPrefix) && options.method === "POST") {
+        return json({ url: `${url.pathname.replace("/storage/v1", "")}?token=signed-upload-token`, token: "signed-upload-token" });
+      }
+      if (url.pathname.startsWith(signedPrefix) && options.method === "PUT") {
+        const objectPath = url.pathname.slice(signedPrefix.length).split("/").map(decodeURIComponent).join("/");
+        const bytes = Buffer.isBuffer(options.body) ? options.body : Buffer.from(await options.body.arrayBuffer());
+        storage.objects.set(objectPath, { bytes, contentType: options.headers?.["Content-Type"] || "application/octet-stream" });
+        return json({ Key: objectPath });
+      }
+      if (url.pathname.startsWith(objectPrefix)) {
+        const objectPath = url.pathname.slice(objectPrefix.length).split("/").map(decodeURIComponent).join("/");
+        const object = storage.objects.get(objectPath);
+        if (!object) return json({ message: "Not found" }, 404);
+        const headers = { "Content-Type": object.contentType, "Content-Length": String(object.bytes.length) };
+        if (options.method === "HEAD") return new Response(null, { status: 200, headers });
+        return new Response(object.bytes.subarray(0, 32), { status: 206, headers });
+      }
+      return json({ Key: "uploaded" });
+    }
+
     const table = url.pathname.replace("/rest/v1/", "");
     if (table === "cf_users") {
       const encodedAuthId = url.searchParams.get("or") || "";
@@ -110,7 +135,16 @@ async function withCommandCenter(run) {
       }
       return json(projects);
     }
-    if (table === "cf_assets") return json(assets);
+    if (table === "cf_assets") {
+      if (options.method === "POST") {
+        const body = JSON.parse(options.body);
+        const current = assets.find((asset) => asset.id === body.id);
+        if (current) Object.assign(current, body);
+        else assets.push(body);
+        return json([body]);
+      }
+      return json(assets);
+    }
     if (table === "cf_render_jobs") return json([]);
     if (table === "cf_clip_candidates") return json(clipCandidates);
     if (table === "cf_production_jobs") {
@@ -163,7 +197,7 @@ async function withCommandCenter(run) {
   const auth = (token) => ({ Authorization: `Bearer ${token}` });
 
   try {
-    await run({ baseUrl, auth, events, jobs, workers, requests });
+    await run({ baseUrl, auth, events, jobs, workers, requests, storage, assets });
   } finally {
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     global.fetch = originalFetch;
@@ -305,6 +339,54 @@ test("hosted clipper selection persists and variation jobs carry stable referenc
       mediaType: "image"
     }]);
     assert.equal(events.some((event) => event.event_type === "production.job.queued"), true);
+  });
+});
+
+test("hosted staff reaction upload uses a signed direct-to-Storage handoff", async () => {
+  await withCommandCenter(async ({ baseUrl, auth, storage, assets }) => {
+    storage.failUploads = true;
+    const failed = await fetch(`${baseUrl}/api/projects/staff-project/clipper/reaction/upload-url`, {
+      method: "POST",
+      headers: { ...auth("staff-auth"), "Content-Type": "application/json" },
+      body: JSON.stringify({ fileName: "Maya.mp4", contentType: "video/mp4", size: 8 * 1024 * 1024 })
+    });
+    assert.equal(failed.status, 500);
+    assert.match((await failed.json()).error, /signed upload URL failed: 503/i);
+
+    storage.failUploads = false;
+    const video = Buffer.alloc(8 * 1024 * 1024);
+    video.write("ftypisom", 4, "ascii");
+    const prepared = await fetch(`${baseUrl}/api/projects/staff-project/clipper/reaction/upload-url`, {
+      method: "POST",
+      headers: { ...auth("staff-auth"), "Content-Type": "application/json" },
+      body: JSON.stringify({ fileName: "Maya.mp4", contentType: "video/mp4", size: video.length })
+    });
+    assert.equal(prepared.status, 201);
+    const handoff = await prepared.json();
+    assert.match(handoff.uploadUrl, /^https:\/\/project\.supabase\.co\/storage\/v1\/object\/upload\/sign\//);
+
+    const directUpload = await fetch(handoff.uploadUrl, { method: "PUT", headers: { "Content-Type": "video/mp4" }, body: video });
+    assert.equal(directUpload.status, 200);
+
+    const completed = await fetch(`${baseUrl}/api/projects/staff-project/clipper/reaction/complete`, {
+      method: "POST",
+      headers: { ...auth("staff-auth"), "Content-Type": "application/json" },
+      body: JSON.stringify({ upload: handoff.upload })
+    });
+    assert.equal(completed.status, 200);
+    const body = await completed.json();
+    assert.equal(body.ok, true);
+    const uploaded = assets.find((asset) => asset.kind === "reaction-character" && /^https:\/\/project\.supabase\.co\/storage\//.test(asset.url || ""));
+    assert.match(uploaded.url, /^https:\/\/project\.supabase\.co\/storage\/v1\/object\/public\/contentflow-media\//);
+    assert.equal(uploaded.media_type, "video");
+
+    const tampered = await fetch(`${baseUrl}/api/projects/staff-project/clipper/reaction/complete`, {
+      method: "POST",
+      headers: { ...auth("staff-auth"), "Content-Type": "application/json" },
+      body: JSON.stringify({ upload: { ...handoff.upload, displayName: "Forged" } })
+    });
+    assert.equal(tampered.status, 500);
+    assert.match((await tampered.json()).error, /signature|metadata/i);
   });
 });
 
