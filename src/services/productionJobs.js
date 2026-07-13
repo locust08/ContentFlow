@@ -47,3 +47,35 @@ export function buildProductionJob({ projectName, jobType, payload = {}, request
     requestedBy: requestedBy || ""
   };
 }
+
+export const PRODUCTION_JOB_STATUSES = Object.freeze(["queued", "processing", "completed", "failed", "cancelled"]);
+
+export function canCancelProductionJob(job) {
+  return job?.status === "queued";
+}
+
+export function canRetryProductionJob(job) {
+  return job?.status === "failed" || job?.status === "cancelled";
+}
+
+export function productionJobSummary(jobs = []) {
+  const summary = { queued: 0, processing: 0, completed: 0, failed: 0, cancelled: 0, total: jobs.length };
+  for (const job of jobs) {
+    if (Object.hasOwn(summary, job?.status)) summary[job.status] += 1;
+  }
+  return summary;
+}
+
+export function productionJobDuration(job, now = Date.now()) {
+  if (!job?.startedAt) return 0;
+  const start = Date.parse(job.startedAt);
+  const end = job.completedAt ? Date.parse(job.completedAt) : Number(now);
+  return Number.isFinite(start) && Number.isFinite(end) ? Math.max(0, end - start) : 0;
+}
+
+export function workerHealth(worker, now = Date.now(), timeoutMs = 20000) {
+  if (!worker?.lastSeenAt) return { status: "offline", ageMs: Infinity };
+  const ageMs = Math.max(0, Number(now) - Date.parse(worker.lastSeenAt));
+  if (!Number.isFinite(ageMs) || ageMs > timeoutMs) return { status: "offline", ageMs };
+  return { status: worker.currentJobId ? "busy" : "online", ageMs };
+}
