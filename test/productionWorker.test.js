@@ -5,6 +5,22 @@ import path from "node:path";
 import test from "node:test";
 import { createProductionWorker, deliverVariationOutputs, runWorkerTick } from "../src/worker/productionWorker.js";
 
+function deferred() {
+  let resolve;
+  const promise = new Promise((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+async function waitFor(condition) {
+  for (let attempts = 0; attempts < 20; attempts += 1) {
+    if (condition()) return;
+    await Promise.resolve();
+  }
+  assert.fail("Timed out waiting for asynchronous worker state.");
+}
+
 function variationResult() {
   return {
     mode: "clipper-character-variations",
@@ -220,4 +236,141 @@ test("schedules five-second heartbeats and clears the timer during shutdown", as
 
   assert.equal(heartbeats.length, 2);
   assert.deepEqual(cleared, [0]);
+});
+
+test("constructs the default worker identity without shadowing the Node process", () => {
+  const worker = createProductionWorker();
+
+  assert.equal(typeof worker.workerId, "string");
+  assert.notEqual(worker.workerId, "");
+  assert.equal(typeof worker.workerName, "string");
+  assert.notEqual(worker.workerName, "");
+});
+
+test("persists a completed variation output URL when the runtime marks a partial result failed", async () => {
+  const updates = [];
+  const result = variationResult();
+  result.outputs[0].status = "failed";
+  result.outputs[0].error = "render failed";
+  result.outputs[1].outputUrl = "https://storage/two.mp4";
+  result.completed = 1;
+  result.failed = 1;
+  const worker = createProductionWorker({
+    workerId: "test-worker",
+    workerName: "Test Worker",
+    claimJob: async () => ({ id: "job-1", projectName: "demo", jobType: "clipper-render-variations" }),
+    updateJob: async (id, patch) => updates.push({ id, patch }),
+    updateHeartbeat: async () => {},
+    processJob: async () => result
+  });
+
+  await worker.tick();
+
+  assert.deepEqual(updates.at(-1), {
+    id: "job-1",
+    patch: {
+      status: "failed",
+      progress: 25,
+      outputUrl: "https://storage/two.mp4",
+      error: "1 variation output failed.",
+      result
+    }
+  });
+});
+
+test("serializes a deferred busy heartbeat before the final idle heartbeat", async () => {
+  const heartbeatWrites = [];
+  let persistedStatus = "";
+  const processing = deferred();
+  const worker = createProductionWorker({
+    workerId: "test-worker",
+    workerName: "Test Worker",
+    claimJob: async () => ({ id: "job-1", projectName: "demo", jobType: "pipeline" }),
+    updateJob: async () => {},
+    updateHeartbeat: (heartbeat) => {
+      const write = deferred();
+      heartbeatWrites.push({ heartbeat, write });
+      return write.promise.then(() => {
+        persistedStatus = heartbeat.status;
+      });
+    },
+    processJob: async () => processing.promise
+  });
+
+  const tick = worker.tick();
+  await waitFor(() => heartbeatWrites.length === 1);
+  heartbeatWrites[0].write.resolve();
+  await waitFor(() => heartbeatWrites[0].heartbeat.status === "busy");
+  const staleBusy = worker.heartbeat();
+  await waitFor(() => heartbeatWrites.length === 2);
+  processing.resolve({ outputUrl: "https://example.test/final.mp4" });
+  await new Promise(setImmediate);
+
+  assert.equal(heartbeatWrites.length, 2);
+  heartbeatWrites[1].write.resolve();
+  await waitFor(() => heartbeatWrites.length === 3);
+  heartbeatWrites[2].write.resolve();
+  await Promise.all([staleBusy, tick]);
+
+  assert.equal(heartbeatWrites.at(-1).heartbeat.status, "online");
+  assert.equal(persistedStatus, "online");
+});
+
+test("records the last persisted progress when a later milestone update rejects", async () => {
+  const updates = [];
+  const worker = createProductionWorker({
+    workerId: "test-worker",
+    workerName: "Test Worker",
+    claimJob: async () => ({ id: "job-1", projectName: "demo", jobType: "pipeline" }),
+    updateJob: async (_id, patch) => {
+      updates.push(patch);
+      if (patch.progress === 75) throw new Error("persistence failed");
+    },
+    updateHeartbeat: async () => {},
+    processJob: async () => ({ outputUrl: "https://example.test/final.mp4" })
+  });
+
+  await worker.tick();
+
+  assert.equal(updates.at(-1).status, "failed");
+  assert.equal(updates.at(-1).progress, 25);
+  assert.equal(updates.at(-1).error, "persistence failed");
+});
+
+test("coalesces concurrent starts into one initial heartbeat and timer", async () => {
+  const timers = [];
+  const worker = createProductionWorker({
+    workerId: "test-worker",
+    workerName: "Test Worker",
+    updateHeartbeat: async () => {},
+    setIntervalFn: (...args) => {
+      timers.push(args);
+      return timers.length;
+    }
+  });
+
+  await Promise.all([worker.start(), worker.start()]);
+
+  assert.equal(timers.length, 1);
+});
+
+test("does not schedule a timer when shutdown races an initial heartbeat", async () => {
+  const pendingHeartbeat = deferred();
+  const timers = [];
+  const worker = createProductionWorker({
+    workerId: "test-worker",
+    workerName: "Test Worker",
+    updateHeartbeat: async () => pendingHeartbeat.promise,
+    setIntervalFn: (...args) => {
+      timers.push(args);
+      return timers.length;
+    }
+  });
+
+  const start = worker.start();
+  worker.shutdown();
+  pendingHeartbeat.resolve();
+  await start;
+
+  assert.equal(timers.length, 0);
 });

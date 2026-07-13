@@ -222,13 +222,13 @@ function resultOutputUrl(result) {
 export async function runWorkerTick({
   claimJob = claimNextSupabaseProductionJob,
   updateJob = updateSupabaseProductionJob,
-  processJob: process = processJob
+  processJob: runJob = processJob
 } = {}) {
   const job = await claimJob();
   if (!job) return false;
   console.log(`[worker] processing ${job.id} ${job.jobType} for ${job.projectName}`);
   try {
-    const result = await process(job);
+    const result = await runJob(job);
     const variationFailed = result?.mode === "clipper-character-variations" && result.failed > 0;
     await updateJob(job.id, {
       status: variationFailed ? "failed" : "completed",
@@ -255,7 +255,7 @@ export function createProductionWorker({
   claimJob = claimNextSupabaseProductionJob,
   updateJob = updateSupabaseProductionJob,
   updateHeartbeat = upsertSupabaseWorkerHeartbeat,
-  processJob: process = processJob,
+  processJob: runJob = processJob,
   now = () => new Date(),
   setIntervalFn = setInterval,
   clearIntervalFn = clearInterval,
@@ -263,9 +263,12 @@ export function createProductionWorker({
 } = {}) {
   let currentJobId = "";
   let heartbeatTimer = null;
+  let heartbeatTail = Promise.resolve();
+  let startPromise = null;
+  let lifecycleVersion = 0;
 
-  async function heartbeat() {
-    await updateHeartbeat({
+  function heartbeat() {
+    const heartbeatRecord = {
       workerId,
       workerName,
       hostname,
@@ -273,7 +276,13 @@ export function createProductionWorker({
       currentJobId,
       capabilities: Array.from(capabilities),
       lastSeenAt: now().toISOString()
-    });
+    };
+    const write = heartbeatTail.then(
+      () => updateHeartbeat(heartbeatRecord),
+      () => updateHeartbeat(heartbeatRecord)
+    );
+    heartbeatTail = write.catch(() => {});
+    return write;
   }
 
   async function tick() {
@@ -284,41 +293,44 @@ export function createProductionWorker({
     }
 
     currentJobId = job.id;
-    let progress = 25;
+    let lastPersistedProgress = 0;
+    const persistMilestone = async (patch) => {
+      await updateJob(job.id, patch);
+      if (Number.isFinite(patch.progress)) lastPersistedProgress = patch.progress;
+    };
     try {
       await heartbeat();
-      await updateJob(job.id, {
+      await persistMilestone({
         status: "processing",
-        progress,
+        progress: 25,
         progressMessage: "Preparing production inputs"
       });
-      const result = await process(job);
+      const result = await runJob(job);
       const variationFailed = result?.mode === "clipper-character-variations" && result.failed > 0;
       if (variationFailed) {
-        await updateJob(job.id, {
+        await persistMilestone({
           status: "failed",
-          progress,
+          progress: lastPersistedProgress,
+          outputUrl: resultOutputUrl(result),
           error: `${result.failed} variation output${result.failed === 1 ? "" : "s"} failed.`,
           result
         });
         return true;
       }
 
-      progress = 75;
-      await updateJob(job.id, {
+      await persistMilestone({
         status: "processing",
-        progress,
+        progress: 75,
         progressMessage: "Production operation completed",
         result
       });
-      progress = 90;
-      await updateJob(job.id, {
+      await persistMilestone({
         status: "processing",
-        progress,
+        progress: 90,
         progressMessage: "Saving output records",
         result
       });
-      await updateJob(job.id, {
+      await persistMilestone({
         status: "completed",
         progress: 100,
         progressMessage: "Completed",
@@ -329,7 +341,7 @@ export function createProductionWorker({
     } catch (error) {
       await updateJob(job.id, {
         status: "failed",
-        progress,
+        progress: lastPersistedProgress,
         error: errorMessage(error)
       });
       return true;
@@ -339,15 +351,27 @@ export function createProductionWorker({
     }
   }
 
-  async function start() {
-    if (heartbeatTimer !== null) return;
-    await heartbeat();
-    heartbeatTimer = setIntervalFn(() => {
-      void heartbeat().catch(() => {});
-    }, heartbeatMs);
+  function start() {
+    if (heartbeatTimer !== null) return Promise.resolve();
+    if (startPromise) return startPromise;
+
+    const startVersion = lifecycleVersion;
+    const startup = (async () => {
+      await heartbeat();
+      if (startVersion !== lifecycleVersion || heartbeatTimer !== null) return;
+      heartbeatTimer = setIntervalFn(() => {
+        void heartbeat().catch(() => {});
+      }, heartbeatMs);
+    })();
+    startPromise = startup;
+    return startup.finally(() => {
+      if (startPromise === startup) startPromise = null;
+    });
   }
 
   function shutdown() {
+    lifecycleVersion += 1;
+    startPromise = null;
     if (heartbeatTimer === null) return;
     clearIntervalFn(heartbeatTimer);
     heartbeatTimer = null;
