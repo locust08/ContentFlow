@@ -1,0 +1,17 @@
+{
+  "name": "ContentFlow AI Staff Studio",
+  "short_name": "ContentFlow",
+  "description": "Mobile staff module for assigned ContentFlow AI production projects.",
+  "start_url": "/mobile.html",
+  "display": "standalone",
+  "background_color": "#fff7df",
+  "theme_color": "#f7b801",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

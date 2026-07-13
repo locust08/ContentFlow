@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ContentFlow AI</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="mark">CF</span>
+          <div>
+            <h1>ContentFlow AI</h1>
+            <p>Digital Bee production system</p>
+          </div>
+        </div>
+        <div class="auth-strip glass-panel">
+          <span id="auth-user-label">Local demo</span>
+          <button id="auth-logout" type="button">Logout</button>
+        </div>
+
+        <nav class="sidebar-menu" aria-label="Main workspace">
+          <a href="#studio-overview" data-nav-view="dashboard">Dashboard</a>
+          <a href="#client-campaigns" data-nav-view="dashboard">Clients & Campaigns</a>
+          <a href="#project-list">Projects</a>
+          <a href="#source-assets" data-project-shortcut="ai-generator">AI Generator</a>
+          <a href="#clipper-generator" data-project-shortcut="auto-clipper">Auto Clipper</a>
+          <a href="#media-library" data-nav-view="media-library">Media Library</a>
+          <a href="#analytics-panel" data-nav-view="analytics">Analytics</a>
+          <a href="/mobile.html">Mobile Staff</a>
+        </nav>
+
+        <form id="project-form" class="new-project glass-panel">
+          <label for="project-name">New project</label>
+          <div class="type-choice" id="project-type-choice">
+            <button type="button" class="type-option active" data-project-type="ai-generator">AI Generator</button>
+            <button type="button" class="type-option" data-project-type="auto-clipper">Auto Clipper</button>
+          </div>
+          <div class="inline">
+            <input id="project-name" name="name" placeholder="ai-ugc-campaign" autocomplete="off">
+            <button type="submit">Create</button>
+          </div>
+          <select id="project-client-select" aria-label="Project client"></select>
+          <select id="project-campaign-select" aria-label="Project campaign"></select>
+          <select id="project-staff-select" aria-label="Assigned staff"></select>
+          <select id="project-reviewer-select" aria-label="Reviewer"></select>
+          <select id="project-priority-select" aria-label="Priority">
+            <option value="normal">Normal priority</option>
+            <option value="high">High priority</option>
+            <option value="urgent">Urgent priority</option>
+          </select>
+          <select id="project-folder-select" aria-label="Project folder"></select>
+        </form>
+
+        <form id="folder-form" class="new-project glass-panel compact-form">
+          <label for="folder-name">New folder</label>
+          <div class="inline">
+            <input id="folder-name" name="name" placeholder="Campaign folder" autocomplete="off">
+            <button type="submit">Add</button>
+          </div>
+        </form>
+
+        <div class="folder-list" id="folder-list"></div>
+
+        <div class="project-list" id="project-list"></div>
+      </aside>
+
+      <section class="workspace">
+        <header class="studio-hero liquid-glass">
+          <div class="hero-copy">
+            <p class="eyebrow">Digital Bee workflow OS</p>
+            <h2 id="active-title">Select or create a project</h2>
+            <p class="hero-subtitle">Run client campaigns from project assignment to AI-assisted output, review, and production analytics.</p>
+            <div class="role-strip" aria-label="User roles">
+              <span>Admin</span>
+              <span>Staff / Editor</span>
+              <span>Manager / Client</span>
+            </div>
+          </div>
+          <div class="hero-actions">
+            <div class="status" id="status">Ready</div>
+            <select id="active-project-folder" aria-label="Move active project to folder"></select>
+            <button id="next-action-button" type="button">Open</button>
+          </div>
+          <div class="next-card">
+            <p class="eyebrow">Next action</p>
+            <strong id="next-action-title">Select project</strong>
+          </div>
+        </header>
+
+        <section class="studio-overview" id="studio-overview">
+          <div class="overview-grid">
+            <article class="metric-card">
+              <span>Active Projects</span>
+              <strong id="metric-active-projects">0</strong>
+              <p>Live production workspaces</p>
+            </article>
+            <article class="metric-card">
+              <span>Videos Rendered</span>
+              <strong id="metric-renders">0</strong>
+              <p>Final outputs and clip exports</p>
+            </article>
+            <article class="metric-card">
+              <span>Ready For Review</span>
+              <strong id="metric-review">0</strong>
+              <p>Projects with media output</p>
+            </article>
+            <article class="metric-card">
+              <span>AI / Clipper Split</span>
+              <strong id="metric-split">0 / 0</strong>
+              <p>Generator vs clipping workload</p>
+            </article>
+          </div>
+
+          <div class="ops-grid">
+            <section class="panel role-panel" id="client-campaigns">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Admin workspace</p>
+                  <h3>Clients, Campaigns, Assignments</h3>
+                </div>
+                <span class="mini-state ready">FYP module</span>
+              </div>
+              <div class="management-grid">
+                <form id="client-form" class="mini-form">
+                  <label for="client-name">New client</label>
+                  <input id="client-name" placeholder="Client name" autocomplete="off">
+                  <input id="client-industry" placeholder="Industry" autocomplete="off">
+                  <button type="submit">Add Client</button>
+                </form>
+                <form id="campaign-form" class="mini-form">
+                  <label for="campaign-name">New campaign</label>
+                  <select id="campaign-client-select" aria-label="Campaign client"></select>
+                  <input id="campaign-name" placeholder="Campaign name" autocomplete="off">
+                  <input id="campaign-objective" placeholder="Objective" autocomplete="off">
+                  <button type="submit">Add Campaign</button>
+                </form>
+              </div>
+              <div class="flow-lane" id="assignment-flow">
+                <span>Create client</span>
+                <span>Create campaign</span>
+                <span>Assign project</span>
+                <span>Track status</span>
+              </div>
+              <p class="project-meta">This is the management layer that will later connect to Supabase users, clients, campaigns, and staff assignment records.</p>
+            </section>
+
+            <section class="panel role-panel" id="media-review">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Manager / Client view</p>
+                  <h3>Media Library and Approval</h3>
+                </div>
+                <span class="mini-state">Preview</span>
+              </div>
+              <div class="review-cards">
+                <article>
+                  <strong>Final outputs</strong>
+                  <span>UGC videos, highlight clips, subtitled MP4s</span>
+                </article>
+                <article>
+                  <strong>Approval status</strong>
+                  <span>Pending, approved, request changes</span>
+                </article>
+                <article>
+                  <strong>Campaign visibility</strong>
+                  <span>Client sees only their campaign media and analytics</span>
+                </article>
+              </div>
+              <div class="approval-actions">
+                <textarea id="approval-feedback" placeholder="Reviewer/client feedback for the active project"></textarea>
+                <div class="actions">
+                  <button id="submit-for-review" type="button">Submit Active Project</button>
+                  <button id="approve-project" type="button">Approve</button>
+                  <button id="request-changes" type="button">Request Changes</button>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <section class="panel analytics-panel" id="analytics-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Analytics</p>
+                <h3>Production Health</h3>
+              </div>
+              <span class="mini-state ready">Dashboard-ready</span>
+            </div>
+            <div class="chart-row" aria-label="Production trend preview">
+              <span style="height: 35%"></span>
+              <span style="height: 58%"></span>
+              <span style="height: 44%"></span>
+              <span style="height: 72%"></span>
+              <span style="height: 50%"></span>
+              <span style="height: 86%"></span>
+              <span style="height: 64%"></span>
+            </div>
+            <div class="analytics-grid" id="analytics-breakdown"></div>
+            <p class="project-meta">Current values are calculated from local projects. In the FYP-ready version, this will query Supabase for campaign output, staff productivity, approval rate, and monthly content volume.</p>
+          </section>
+
+          <section class="panel" id="supabase-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Database Backend</p>
+                <h3>Supabase PostgreSQL</h3>
+              </div>
+              <span class="mini-state" id="supabase-state">Checking</span>
+            </div>
+            <div class="analytics-grid" id="supabase-breakdown"></div>
+            <div class="actions compact">
+              <button id="init-supabase" type="button">Initialize Schema</button>
+              <button id="sync-supabase" type="button">Sync Local Records</button>
+            </div>
+            <p class="project-meta">This connects the local prototype to the structured DBMS layer required by the FYP proposal.</p>
+          </section>
+
+          <section class="panel approval-panel" id="approval-queue">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Approval queue</p>
+                <h3>Reviewer / Client Actions</h3>
+              </div>
+              <span class="mini-state" id="approval-count">0 pending</span>
+            </div>
+            <div class="approval-list" id="approval-list"></div>
+          </section>
+
+          <section class="panel media-library-panel" id="media-library">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Media Library</p>
+                <h3>Final Outputs Across Campaigns</h3>
+              </div>
+              <span class="mini-state ready" id="media-count">0 files</span>
+            </div>
+            <div class="media-library-grid" id="media-library-grid"></div>
+          </section>
+        </section>
+
+        <section class="workflow-steps liquid-glass" id="workflow-steps"></section>
+
+        <section class="studio-section" id="production-jobs-panel" hidden>
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Production Engine</p>
+              <h3>Queued Worker Jobs</h3>
+            </div>
+            <button id="refresh-production-jobs" type="button">Refresh Jobs</button>
+          </div>
+          <section class="panel">
+            <div class="analytics-grid" id="production-jobs-list"></div>
+          </section>
+        </section>
+
+        <section class="studio-section ai-workflow" id="source-assets">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">01 Source Assets</p>
+              <h3>Reference, Product, Character</h3>
+            </div>
+          </div>
+
+          <div class="asset-workbench">
+            <section class="panel upload-panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Reference video</p>
+                  <h3>Proven content flow</h3>
+                </div>
+                <span class="mini-state" id="reference-state">Waiting</span>
+              </div>
+              <input id="reference-file" type="file" accept="video/mp4,video/*">
+              <div class="actions">
+                <button id="upload-reference">Upload Reference</button>
+                <button id="run-analysis">Run Analysis</button>
+              </div>
+              <video id="reference-preview" controls></video>
+            </section>
+
+            <section class="panel upload-panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Product image</p>
+                  <h3>Promoted item</h3>
+                </div>
+                <span class="mini-state" id="product-state">Waiting</span>
+              </div>
+              <input id="product-file" type="file" accept="image/png,image/jpeg,image/webp,image/avif">
+              <div class="actions">
+                <button id="upload-product">Upload Product</button>
+              </div>
+              <div class="asset-grid compact-assets" id="product-preview"></div>
+            </section>
+
+            <section class="panel upload-panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Character reference</p>
+                  <h3>Presenter identity</h3>
+                </div>
+                <span class="mini-state" id="character-state">Waiting</span>
+              </div>
+              <input id="character-file" type="file" accept="image/png,image/jpeg,image/webp,image/avif">
+              <div class="actions">
+                <button id="upload-character">Upload Character</button>
+              </div>
+              <div class="asset-grid compact-assets" id="character-preview"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="studio-section ai-workflow" id="reference-brain">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">02 Reference Brain</p>
+              <h3>Analysis and Style Blueprint</h3>
+            </div>
+          </div>
+
+          <div class="brain-grid">
+            <section class="panel">
+              <h3>Analysis Quality</h3>
+              <div class="quality-grid" id="analysis-quality"></div>
+            </section>
+
+            <section class="panel">
+              <h3>Extracted Frames</h3>
+              <div class="frames" id="frames"></div>
+            </section>
+          </div>
+
+          <section class="panel blueprint-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Editable blueprint</p>
+                <h3>Reference Style JSON</h3>
+              </div>
+              <button data-save-json="styleAnalysis">Save JSON</button>
+            </div>
+            <textarea id="styleAnalysis-editor" class="json-editor" spellcheck="false"></textarea>
+          </section>
+        </section>
+
+        <section class="studio-section output-section ai-workflow" id="generate-finish">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">03 Generate & Finish</p>
+              <h3>UGC Output and Final MP4</h3>
+            </div>
+            <div class="actions compact">
+              <button id="generate-ugc-video">Generate UGC Video</button>
+              <button id="transcribe-generated-video">Transcribe Output</button>
+              <button id="render-final-video">Render Final MP4</button>
+            </div>
+          </div>
+
+          <div class="output-grid">
+            <section class="panel primary-output">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Primary Output</p>
+                  <h3>Selected UGC Video</h3>
+                </div>
+              </div>
+              <div class="video-grid featured-video" id="primary-ugc-video"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Candidates</p>
+                  <h3>LibTV Alternatives</h3>
+                </div>
+              </div>
+              <div class="video-grid" id="candidate-ugc-videos"></div>
+            </section>
+          </div>
+
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Final MP4</p>
+                <h3>Remotion Render</h3>
+              </div>
+            </div>
+            <div class="video-grid" id="final-renders"></div>
+          </section>
+
+          <details class="panel technical-details">
+            <summary>
+              <span>
+                <span class="eyebrow">Technical Details</span>
+                <strong>Manifests and Transcript</strong>
+              </span>
+            </summary>
+            <div class="grid three">
+              <div>
+                <p class="eyebrow">Transcript</p>
+                <pre id="transcript-view" class="json-view compact-view"></pre>
+              </div>
+              <div>
+                <p class="eyebrow">LibTV</p>
+                <pre id="libtv-manifest-view" class="json-view compact-view"></pre>
+              </div>
+              <div>
+                <p class="eyebrow">Render</p>
+                <pre id="render-manifest-view" class="json-view compact-view"></pre>
+              </div>
+            </div>
+          </details>
+        </section>
+
+        <section class="studio-section clipper-section" id="clipper-generator">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">04 Clipper Generator</p>
+              <h3>Find epic moments and render reaction clips</h3>
+            </div>
+          </div>
+
+          <div class="clipper-grid">
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Source Link</p>
+                  <h3>YouTube or TikTok video</h3>
+                </div>
+                <span class="mini-state" id="clipper-source-state">Waiting</span>
+              </div>
+              <input id="clipper-source-url" type="url" placeholder="https://www.youtube.com/watch?v=...">
+              <div class="actions">
+                <button id="download-clipper-source">Download Source</button>
+                <button id="analyze-clipper-source">Analyze Highlights</button>
+              </div>
+              <video id="clipper-source-preview" controls></video>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Reaction Characters</p>
+                  <h3>Top-left overlays</h3>
+                </div>
+                <span class="mini-state" id="clipper-reaction-state">Waiting</span>
+              </div>
+              <input id="clipper-reaction-file" type="file" multiple accept="image/png,image/jpeg,image/webp,image/avif,video/mp4,video/quicktime,video/webm">
+              <div class="actions">
+                <button id="upload-clipper-reaction">Upload Reaction</button>
+              </div>
+              <div class="asset-grid compact-assets" id="clipper-reaction-preview"></div>
+            </section>
+          </div>
+
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Highlight Candidates</p>
+                <h3>Select moments to render</h3>
+              </div>
+              <div class="actions compact">
+                <button id="render-clipper-video">Render Active Clip</button>
+                <button id="render-selected-clips">Render Selected Clips</button>
+                <button id="render-character-variations">Render Character Variations</button>
+              </div>
+            </div>
+            <div class="highlight-list" id="clipper-highlights"></div>
+          </section>
+
+          <div class="output-grid">
+            <section class="panel primary-output">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Final Clip</p>
+                  <h3>Remotion Clipper Render</h3>
+                </div>
+              </div>
+              <div class="video-grid featured-video" id="clipper-renders"></div>
+              <div class="video-grid" id="clipper-bulk-renders"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Clipper Details</p>
+                  <h3>Transcript and render data</h3>
+                </div>
+              </div>
+              <pre id="clipper-manifest-view" class="json-view compact-view"></pre>
+            </section>
+          </div>
+        </section>
+
+        <section hidden>
+          <nav class="tabs" aria-label="Workflow tabs">
+            <button class="tab active" data-tab="reference"><span>1</span> Reference</button>
+            <button class="tab" data-tab="style"><span>2</span> Style</button>
+            <button class="tab" data-tab="render"><span>3</span> Generate</button>
+          </nav>
+          <section class="tab-panel active" id="reference"></section>
+          <section class="tab-panel" id="style"></section>
+          <section class="tab-panel" id="render"></section>
+          <div id="ugc-video-preview"></div>
+          <input id="topic-input">
+          <button id="generate-content" type="button"></button>
+          <button id="run-pipeline" type="button"></button>
+          <button id="generate-images" type="button"></button>
+          <button id="generate-test-video" type="button"></button>
+          <button id="generate-all-videos" type="button"></button>
+          <button id="generate-voiceover" type="button"></button>
+          <textarea id="contentIdeas-editor"></textarea>
+          <textarea id="scriptPlan-editor"></textarea>
+          <textarea id="imagePrompts-editor"></textarea>
+          <textarea id="videoPrompts-editor"></textarea>
+          <textarea id="editPlan-editor"></textarea>
+          <div id="generated-images"></div>
+          <div id="generated-videos"></div>
+          <div id="voiceover-audio"></div>
+          <pre id="voiceover-manifest-view"></pre>
+        </section>
+      </section>
+    </main>
+
+    <section class="auth-gate" id="auth-gate" hidden>
+      <form class="auth-card" id="auth-form">
+        <p class="eyebrow">Supabase Auth</p>
+        <h2>Login to ContentFlow AI</h2>
+        <p>Use your FYP demo account to open the correct Admin, Staff, or Client workspace.</p>
+        <input id="auth-email" type="email" placeholder="email@digitalbee.ai" autocomplete="email">
+        <input id="auth-password" type="password" placeholder="Password" autocomplete="current-password">
+        <button type="submit">Login</button>
+        <p class="project-meta" id="auth-message">Authentication is required for hosted demo mode.</p>
+      </form>
+    </section>
+
+    <div class="limit-modal" id="limit-modal" aria-hidden="true">
+      <div class="limit-modal__backdrop" data-close-limit-modal></div>
+      <section class="limit-modal__panel" role="alertdialog" aria-labelledby="limit-modal-title" aria-describedby="limit-modal-message">
+        <p class="eyebrow">Upload limit</p>
+        <h2 id="limit-modal-title">This file is over the current processing limit</h2>
+        <p id="limit-modal-message">Use a shorter or compressed file, then try again.</p>
+        <div class="limit-modal__actions">
+          <button type="button" data-close-limit-modal>Got it</button>
+        </div>
+      </section>
+    </div>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

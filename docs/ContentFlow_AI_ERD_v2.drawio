@@ -1,0 +1,80 @@
+<mxfile host="app.diagrams.net" agent="Codex">
+  <diagram id="contentflow-ai-erd-v2" name="ContentFlow AI ERD v2">
+    <mxGraphModel dx="648" dy="434" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1700" pageHeight="1250" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontFamily=Times New Roman;fontSize=28;fontStyle=1" value="ContentFlow AI Entity Relationship Diagram" vertex="1">
+          <mxGeometry height="50" width="840" x="430" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="client" parent="1" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;fontFamily=Times New Roman;fontSize=16;fillColor=#ffffff;strokeColor=#333333;" value="&lt;b&gt;Client&lt;/b&gt;&lt;hr&gt;client_id PK&lt;br&gt;org_id FK&lt;br&gt;name&lt;br&gt;industry&lt;br&gt;contact" vertex="1">
+          <mxGeometry height="230" width="300" x="80" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="campaign" parent="1" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;fontFamily=Times New Roman;fontSize=16;fillColor=#ffffff;strokeColor=#333333;" value="&lt;b&gt;Campaign&lt;/b&gt;&lt;hr&gt;campaign_id PK&lt;br&gt;client_id FK&lt;br&gt;name&lt;br&gt;objective&lt;br&gt;status" vertex="1">
+          <mxGeometry height="230" width="300" x="500" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="user" parent="1" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;fontFamily=Times New Roman;fontSize=16;fillColor=#ffffff;strokeColor=#333333;" value="&lt;b&gt;User&lt;/b&gt;&lt;hr&gt;user_id PK&lt;br&gt;org_id FK&lt;br&gt;name&lt;br&gt;email&lt;br&gt;role" vertex="1">
+          <mxGeometry height="230" width="300" x="80" y="500" as="geometry" />
+        </mxCell>
+        <mxCell id="project" parent="1" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;fontFamily=Times New Roman;fontSize=16;fillColor=#ffffff;strokeColor=#333333;" value="&lt;b&gt;Project&lt;/b&gt;&lt;hr&gt;project_id PK&lt;br&gt;campaign_id FK&lt;br&gt;assigned_user_id FK&lt;br&gt;type&lt;br&gt;status&lt;br&gt;priority" vertex="1">
+          <mxGeometry height="260" width="340" x="640" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="asset" parent="1" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;fontFamily=Times New Roman;fontSize=16;fillColor=#ffffff;strokeColor=#333333;" value="&lt;b&gt;Asset&lt;/b&gt;&lt;hr&gt;asset_id PK&lt;br&gt;project_id FK&lt;br&gt;asset_type&lt;br&gt;file_url&lt;br&gt;metadata" vertex="1">
+          <mxGeometry height="230" width="330" x="1190" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="clip" parent="1" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;fontFamily=Times New Roman;fontSize=16;fillColor=#ffffff;strokeColor=#333333;" value="&lt;b&gt;Clip Candidate&lt;/b&gt;&lt;hr&gt;candidate_id PK&lt;br&gt;project_id FK&lt;br&gt;start_time&lt;br&gt;end_time&lt;br&gt;score&lt;br&gt;reason" vertex="1">
+          <mxGeometry height="250" width="330" x="1190" y="400" as="geometry" />
+        </mxCell>
+        <mxCell id="render" parent="1" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;fontFamily=Times New Roman;fontSize=16;fillColor=#ffffff;strokeColor=#333333;" value="&lt;b&gt;Render Job&lt;/b&gt;&lt;hr&gt;render_id PK&lt;br&gt;project_id FK&lt;br&gt;output_url&lt;br&gt;status&lt;br&gt;rendered_at" vertex="1">
+          <mxGeometry height="240" width="330" x="1190" y="710" as="geometry" />
+        </mxCell>
+        <mxCell id="approval" parent="1" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;fontFamily=Times New Roman;fontSize=16;fillColor=#ffffff;strokeColor=#333333;" value="&lt;b&gt;Approval&lt;/b&gt;&lt;hr&gt;approval_id PK&lt;br&gt;project_id FK&lt;br&gt;reviewer_id FK&lt;br&gt;status&lt;br&gt;feedback" vertex="1">
+          <mxGeometry height="240" width="330" x="500" y="900" as="geometry" />
+        </mxCell>
+        <mxCell id="event" parent="1" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;fontFamily=Times New Roman;fontSize=16;fillColor=#ffffff;strokeColor=#333333;" value="&lt;b&gt;Analytics Event&lt;/b&gt;&lt;hr&gt;event_id PK&lt;br&gt;project_id FK&lt;br&gt;user_id FK&lt;br&gt;event_type&lt;br&gt;created_at" vertex="1">
+          <mxGeometry height="240" width="330" x="910" y="900" as="geometry" />
+        </mxCell>
+        <mxCell id="rel-client-campaign" edge="1" parent="1" source="client" style="endArrow=block;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;fontFamily=Times New Roman;fontSize=14;fontStyle=1;labelBackgroundColor=#ffffff;strokeWidth=2;" target="campaign" value="Client 1 → M Campaign&#xa;Campaign M → 1 Client">
+          <mxGeometry relative="1" y="-45" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rel-campaign-project" edge="1" parent="1" source="campaign" style="endArrow=block;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;fontFamily=Times New Roman;fontSize=14;fontStyle=1;labelBackgroundColor=#ffffff;strokeWidth=2;" target="project" value="Campaign 1 → M Project&#xa;Project M → 1 Campaign">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="650" y="410" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rel-user-project" edge="1" parent="1" source="user" style="endArrow=block;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;fontFamily=Times New Roman;fontSize=14;fontStyle=1;labelBackgroundColor=#ffffff;strokeWidth=2;" target="project" value="User 1 → M Project&#xa;Project M → 1 Assigned User">
+          <mxGeometry relative="1" x="-0.2729" y="25" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rel-project-asset" edge="1" parent="1" source="project" style="endArrow=block;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;fontFamily=Times New Roman;fontSize=14;fontStyle=1;labelBackgroundColor=#ffffff;strokeWidth=2;" target="asset" value="Project 1 → M Asset&#xa;Asset M → 1 Project">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rel-project-clip" edge="1" parent="1" source="project" style="endArrow=block;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;fontFamily=Times New Roman;fontSize=14;fontStyle=1;labelBackgroundColor=#ffffff;strokeWidth=2;" target="clip" value="Project 1 → M Clip Candidate&#xa;Clip Candidate M → 1 Project">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rel-project-render" edge="1" parent="1" source="project" style="endArrow=block;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;fontFamily=Times New Roman;fontSize=14;fontStyle=1;labelBackgroundColor=#ffffff;strokeWidth=2;" target="render" value="Project 1 → M Render Job&#xa;Render Job M → 1 Project">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rel-project-approval" edge="1" parent="1" source="project" style="endArrow=block;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;fontFamily=Times New Roman;fontSize=14;fontStyle=1;labelBackgroundColor=#ffffff;strokeWidth=2;" target="approval" value="Project 1 → M Approval&#xa;Approval M → 1 Project">
+          <mxGeometry relative="1" x="0.4603" y="-5" as="geometry">
+            <mxPoint x="5" y="-5" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rel-user-approval" edge="1" parent="1" source="user" style="endArrow=block;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;fontFamily=Times New Roman;fontSize=14;fontStyle=1;labelBackgroundColor=#ffffff;strokeWidth=2;" target="approval" value="User 1 → M Approval&#xa;Approval M → 1 Reviewer">
+          <mxGeometry relative="1" x="0.2632" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rel-project-event" edge="1" parent="1" source="project" style="endArrow=block;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;fontFamily=Times New Roman;fontSize=14;fontStyle=1;labelBackgroundColor=#ffffff;strokeWidth=2;" target="event" value="Project 1 → M Analytics Event&#xa;Analytics Event M → 1 Project">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="legend" parent="1" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=middle;spacing=12;fontFamily=Times New Roman;fontSize=15;fillColor=#f5f5f5;strokeColor=#bbbbbb;" value="&lt;b&gt;Cardinality Legend&lt;/b&gt;&lt;br&gt;1 = One record, M = Many records&lt;br&gt;Most relationships in this prototype are one-to-many (1:M). A future many-to-many (M:N) staff-project assignment can be added using a project_members junction table." vertex="1">
+          <mxGeometry height="80" width="1440" x="80" y="1160" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

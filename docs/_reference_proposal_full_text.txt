@@ -1,0 +1,878 @@
+--- PAGE 1 ---
+i 
+ 
+ 
+ 
+FACULTY OF INFORMATION SCIENCE 
+CAMPUS OF PUNCAK PERDANA 
+ 
+BACHELOR OF INFORMATION SCIENCE (HONS.)  
+INFORMATION CONTENT MANAGEMENT (CDIM263) 
+ 
+ICM658 – DIGITAL INFORMATION CONTENT MANAGEMENT PROJECT 
+ 
+PROPOSAL TITLE: 
+SITETARIK – AN AI WEBSITE OPTIMISATION PLATFORM 
+ 
+PREPARED FOR: 
+DR MOHAMMAD FAZLI BIN BAHARUDDIN 
+ 
+PREPARED BY 
+MUHAMMAD FAIZ BIN HASHIM (2024228802) 
+ 
+GROUP: 
+CDIM2636A 
+ 
+SUBMISSION DATE: 
+26th MAY 2026 
+
+
+--- PAGE 2 ---
+ii 
+ 
+ACKNOWLEDGEMENT 
+Alhamdulillah, first and foremost, I am highly grateful to Allah S.W.T. for allowing me 
+to have enough strength and knowledge to finish this assignment task, as it is a mandatory task 
+in connection with the subject. 
+I would like to take this opportunity to express my gratitude to my parents, family, and 
+all individuals who assisted me in completing this project. In addition, I would like to thank 
+my lecturer, Dr Mohammad Fazli Bin Baharuddin, for his guidance in completing this project. 
+He provided me with information to enable me to write on the topic. 
+Ultimately, I would also like to thank all individuals who contributed to the completion of 
+this assignment, either directly or indirectly. I am very thankful for all the help that I received 
+throughout the process. Thank you very much. 
+  
+
+--- PAGE 3 ---
+iii 
+ 
+TABLE OF CONTENTS 
+1. PROBLEM STATEMENT .............................................................................................. 1 
+1.1. BACKGROUND OF THE PROBLEM ................................................................. 1 
+1.2. PROBLEM IDENTIFICATION ............................................................................ 1 
+1.3. IMPORTANCE OF THE PROBLEM ................................................................... 2 
+2. OBJECTIVES ................................................................................................................... 2 
+2.1. GENERAL OBJECTIVE ........................................................................................ 2 
+2.2. SPECIFIC OBJECTIVES (SMART)..................................................................... 2 
+3. TARGET USERS AND USE CASES .............................................................................. 3 
+3.1. TARGET USERS ..................................................................................................... 3 
+3.1.1. Small Business Owners with Existing Websites ................................................ 3 
+3.1.2. SiteTarik Administrators ..................................................................................... 3 
+3.1.3. Client Testers ........................................................................................................ 3 
+3.2. USE CASE SCENARIOS ........................................................................................ 3 
+3.2.1. Use Case 1: Small Business Owner Selects Core Reborn ................................. 3 
+3.2.2. Use Case 2: Small Business Owner Selects SEO Enhancement ...................... 3 
+3.2.3. Use Case 3: User is Unsure Which Package to Choose..................................... 4 
+3.2.4. Use Case 4: Administrator Manages a Submission .......................................... 4 
+4. SCOPE OF THE PROTOTYPE ..................................................................................... 4 
+4.1. IN SCOPE ................................................................................................................. 4 
+4.1.1. Web Platform ....................................................................................................... 4 
+4.1.2. Mobile Application Prototype ............................................................................. 4 
+4.1.3. Stripe Metadata as Data Storage ........................................................................ 4 
+4.1.4. Basic SEO Support .............................................................................................. 4 
+4.1.5. Tracking Setup ..................................................................................................... 5 
+4.1.6. Blog Content Support .......................................................................................... 5 
+4.1.7. WhatsApp Chatbot and Delivery ....................................................................... 5 
+
+--- PAGE 4 ---
+iv 
+ 
+4.1.8. Gmail Notification ................................................................................................ 5 
+4.1.9. Client Testing ........................................................................................................ 5 
+4.2. OUT OF SCOPE ...................................................................................................... 5 
+4.2.1. User Account System ........................................................................................... 5 
+4.2.2. Full Custom Database.......................................................................................... 5 
+4.2.3. Full Website Redesign .......................................................................................... 6 
+4.2.4. Website Creation from Zero ............................................................................... 6 
+4.2.5. Advanced SEO Services ...................................................................................... 6 
+4.2.6. Multiple Websites Under One Plan .................................................................... 6 
+4.2.7. Overbuilt or Paid System Setup ......................................................................... 6 
+4.2.8. Advanced Tracking or Campaign Management ............................................... 6 
+5. SYSTEM OVERVIEW / ARCHITECTURE ................................................................. 7 
+5.1. SYSTEM OVERVIEW............................................................................................ 7 
+5.2. SYSTEM ARCHITECTURE .................................................................................. 7 
+5.2.1. Frontend ................................................................................................................ 7 
+5.2.2. Backend ................................................................................................................. 7 
+5.2.3. Data Storage ......................................................................................................... 7 
+5.2.4. External Tools and APIs ...................................................................................... 8 
+5.2.5. Hosting Platform .................................................................................................. 8 
+5.2.6. Notification System .............................................................................................. 8 
+5.3. SYSTEM FLOW ...................................................................................................... 9 
+1. User Visits the Landing Page .................................................................................. 9 
+2. User Submits Website Details ................................................................................. 9 
+3. System Records Submission .................................................................................... 9 
+4. Core Reborn Payment Flow .................................................................................... 9 
+5. SEO Enhancement Payment Flow ....................................................................... 10 
+6. Blog Brief Submission............................................................................................ 10 
+
+--- PAGE 5 ---
+v 
+ 
+7. Administrator Review ........................................................................................... 10 
+8. Final Delivery ......................................................................................................... 10 
+6. METHODOLOGY ......................................................................................................... 11 
+6.1. DEVELOPMENT APPROACH ........................................................................... 11 
+6.2. DEVELOPMENT PHASES .................................................................................. 11 
+6.2.1. Planning Phase ................................................................................................... 11 
+6.2.2. Design Phase ....................................................................................................... 11 
+6.2.3. Development Phase ............................................................................................ 12 
+6.2.4. Testing Phase ...................................................................................................... 12 
+6.2.5. Evaluation Phase ................................................................................................ 12 
+6.3. TIMELINE ............................................................................................................. 11 
+7. TOOLS AND TECHNOLOGIES ................................................................................. 13 
+7.1. DEVELOPMENT TOOLS .................................................................................... 13 
+7.1.1. Programming Language .................................................................................... 13 
+7.1.2. Web Framework................................................................................................. 13 
+7.1.3. Mobile Application Tool .................................................................................... 13 
+7.1.4. Data Storage ....................................................................................................... 13 
+7.1.5. Payment Tool ...................................................................................................... 13 
+7.1.6. Communication and Delivery Tool ................................................................... 13 
+7.1.7. Hosting Platform ................................................................................................ 13 
+7.1.8. Tracking and Analytics Tools ............................................................................ 13 
+7.1.9. Version Control Tool .......................................................................................... 14 
+7.1.10. Notification Tool ............................................................................................. 14 
+7.1.11. Website Inspection Tool ................................................................................. 14 
+7.1.12. AI-Assisted Development Tool ...................................................................... 14 
+7.2. JUSTIFICATION .................................................................................................. 15 
+7.2.1. JavaScript/TypeScript ....................................................................................... 15 
+
+--- PAGE 6 ---
+vi 
+ 
+7.2.2. Next.js .................................................................................................................. 15 
+7.2.3. Mobile App Tool ................................................................................................. 15 
+7.2.4. WhatsApp ........................................................................................................... 15 
+7.2.5. Cloudflare ........................................................................................................... 15 
+7.2.6. Google Search Console ...................................................................................... 15 
+7.2.7. Google Tag Manager .......................................................................................... 16 
+7.2.8. Stripe ................................................................................................................... 16 
+7.2.9. Google Analytics 4 .............................................................................................. 16 
+7.2.10. GitHub ............................................................................................................ 16 
+7.2.11. Gmail API ....................................................................................................... 16 
+7.2.12. Playwright ....................................................................................................... 16 
+7.2.13. Codex ............................................................................................................... 17 
+8. EV ALUATION CRITERIA ........................................................................................... 17 
+8.1. TESTING METHODS .......................................................................................... 17 
+8.1.1. Functional Testing .............................................................................................. 17 
+8.1.2. Usability Testing ................................................................................................. 17 
+8.1.3. Delivery Flow Testing ........................................................................................ 17 
+8.2. USER EV ALUATION ............................................................................................ 18 
+8.3. SUCCESS CRITERIA........................................................................................... 18 
+8.3.1. Form Completion ............................................................................................... 18 
+8.3.2. Payment and Confirmation ............................................................................... 18 
+8.3.3. Blog Brief Submission........................................................................................ 18 
+8.3.4. Data Storage ....................................................................................................... 18 
+8.3.5. WhatsApp Delivery ............................................................................................ 18 
+8.3.6. Client Testing ...................................................................................................... 18 
+8.3.7. User Feedback .................................................................................................... 19 
+8.3.8. Gmail Notification .............................................................................................. 19 
+
+--- PAGE 7 ---
+vii 
+ 
+9. CONCLUSION / JUSTIFICATION ............................................................................. 19 
+9.1. SUMMARY OF PROPOSAL ............................................................................... 19 
+9.2. PROJECT JUSTIFICATION ............................................................................... 19 
+10. REFERENCES ........................................................................................................... 20 
+ 
+TABLE OF FIGURES 
+Figure 1: SiteTarik System Flow ............................................................................................... 9 
+ 
+TABLE OF TABLES 
+Table 1: Gantt Chart of Project Timeline ................................................................................. 12 
+  
+
+--- PAGE 8 ---
+1 
+ 
+1. PROBLEM STATEMENT 
+1.1. BACKGROUND OF THE PROBLEM 
+Small businesses use websites to manage and present digital content such as business 
+information, services, products, contact details, and blog articles (Campbell, 2018; 
+SBDCNet, 2025). Many small business owners already have websites built using 
+platforms such as WordPress, Joomla, Drupal, or similar systems (Godreau, 2025; 
+Iqbal et al., 2020), but the content still needs to be maintained after the website is 
+created (SBDCNet, 2025). This includes keeping pages active (SBDCNet, 2025), 
+adding basic SEO such  as meta title and meta description (Google Search Central, 
+2025), creating blog content for long-term visibility (Riserbato, 2026), and setting up 
+tracking tools such as GTM and GA4 to support campaign measurement and website 
+performance tracking (Google for Developers, 2026). 
+1.2. PROBLEM IDENTIFICATION 
+The main problem is that small business owners often struggle to manage and improve 
+their existing website content in a simple and affordable way (SBDCNet, 2025; 
+Restrepo-Morales et al., 2024). Creating a new website can be expensive (Masoner, 
+2026), while maintaining content, visibility, and tracking setup also requires time, cost, 
+and regular effort (SBDCNet, 2025; Google Search Central, 2025; Google for 
+Developers, 2026). Many small businesses do not have their own digital team 
+(Sutherland et al., 2025), so their websites may become inactive, outdated, not properly 
+prepared for search visibility (SBDCNet, 2025; Google Search Central, 2025), or not 
+ready to measure campaign performance through tools such as GTM and GA4 (Google 
+for Developers, 2026). 
+  
+
+--- PAGE 9 ---
+2 
+ 
+1.3. IMPORTANCE OF THE PROBLEM 
+This problem affects small business owners who rely on their websites to promote their 
+business, share information, and attract potential customers (Godreau, 2025; 
+SBDCNet, 2025). If website content, basic SEO, and tracking setup are not managed 
+properly, the business may lose online visibility, customer trust, potential enquiries, 
+and useful performance data (Godreau, 2025; Google for Developers, 2026; Google 
+Search Central, 2025). Therefore, a solution is needed to help small businesses manage 
+existing website content, support basic search visibility, and prepare their websites for 
+measurement more efficiently (Google for Developers, 2026; Google Search Central, 
+2025; SBDCNet, 2025). This aligns with CLO1 because the project focuses on 
+designing a solution to a problem in managing digital content. 
+2. OBJECTIVES 
+2.1. GENERAL OBJECTIVE 
+To design and develop SiteTarik, a digital content management platform that helps 
+Malaysian small business owners manage their existing website content through 
+website duplication, basic SEO, blog content support, tracking setup, and WhatsApp -
+based delivery. 
+2.2. SPECIFIC OBJECTIVES (SMART) 
+The specific objectives are developed based on the SMART approach to ensure they 
+are clear, measurable, and achievable (University of California, n.d.). 
+1. To design and develop a web platform that allows users to submit their business 
+details, website URL, selected package, and WhatsApp consent by the end of 
+Week 18. 
+2. To design a mobile application prototype that allows project or submission 
+information to be viewed clearly by the end of Week 18. 
+3. To develop a structured data storage method using Stripe metadata to store 
+customer details, website information, package selection, blog brief details, and 
+delivery status by the end of Week 18. 
+4. To test the SiteTarik prototype with at least 10 small business clients and collect 
+feedback on usability, package understanding, form completion, and overall 
+experience before the final presentation in Week 18. 
+
+--- PAGE 10 ---
+3 
+ 
+3. TARGET USERS AND USE CASES 
+3.1. TARGET USERS 
+3.1.1. Small Business Owners with Existing Websites  
+Small business owners are the main users of SiteTarik. They already have an 
+existing website and need a simple way to manage website content, basic SEO, 
+blog content, and tracking setup without depending fully on expensive or 
+manual services. 
+3.1.2. SiteTarik Administrators 
+SiteTarik administrators are responsible for reviewing customer submissions, 
+checking the selected package, managing the website duplication or blog 
+content process, and sending the final delivery through WhatsApp. 
+3.1.3. Client Testers 
+Client testers are small business owners who will test the SiteTarik prototype. 
+Their feedback will be used to evaluate usability, package understanding, form 
+completion, and overall experience. 
+3.2. USE CASE SCENARIOS  
+3.2.1. Use Case 1: Small Business Owner Selects Core Reborn 
+The user submits their business details, website URL, package selection, and 
+WhatsApp consent. The system records the submission and guides the user to 
+payment. After payment is completed, the user receives confirmation and waits 
+for the website delivery through WhatsApp. The delivered website will include 
+one-to-one duplication, basic SEO, and tracking setup where applicable. 
+3.2.2. Use Case 2: Small Business Owner Selects SEO Enhancement 
+The user submits the main form and completes payment. The system opens the 
+Blog Brief form for the user to provide blog content details. The submitted 
+information is then stored for blog content planning and delivery. The delivered 
+website will include basic SEO, tracking setup, and blog content support. 
+
+--- PAGE 11 ---
+4 
+ 
+3.2.3. Use Case 3: User is Unsure Which Package to Choose 
+The user contacts the WhatsApp chatbot and provides their website URL. The 
+chatbot asks about the user’s main goal and recommends either Core Reborn or 
+SEO Enhancement based on the user’s needs. 
+3.2.4. Use Case 4: Administrator Manages a Submission 
+The administrator reviews the customer’s submitted details and selected 
+package. The administrator then prepares the website duplication, basic SEO, 
+tracking setup, or blog content process based on the selected package. Final 
+delivery and updates are sent to the user through WhatsApp. 
+4. SCOPE OF THE PROTOTYPE 
+4.1. IN SCOPE 
+The prototype will include the following features: 
+4.1.1. Web Platform 
+The prototype will include a SiteTarik web platform with a landing page, 
+customer form, package selection, payment flow, Thank You page, and Blog 
+Brief form for SEO Enhancement users. 
+4.1.2. Mobile Application Prototype 
+The prototype will include a simple mobile application prototype to display 
+project or submission information clearly. 
+4.1.3. Stripe Metadata as Data Storage 
+The prototype will use Stripe metadata to store customer details, website 
+information, package selection, blog brief details, and delivery status. This is 
+suitable because SiteTarik is a simple, low -cost project and does not require a 
+complex database at this stage. 
+4.1.4. Basic SEO Support 
+The prototype will include basic SEO support such as meta title and meta 
+description for website pages. 
+
+--- PAGE 12 ---
+5 
+ 
+4.1.5. Tracking Setup 
+The prototype will include a basic tracking setup using GTM and GA4, where 
+applicable. This helps prepare the website for campaign measurement and user 
+activity tracking (Google for Developers, 2026; Google Tag Manager Help, 
+n.d.). 
+4.1.6. Blog Content Support 
+The prototype will collect blog details through the Blog Brief form and support 
+blog content planning with proper arrangement, layout, and CTA placement. 
+4.1.7. WhatsApp Chatbot and Delivery 
+The prototype will include WhatsApp chatbot guidance to help users choose a 
+package. Final delivery and order updates will also be handled through 
+WhatsApp. 
+4.1.8. Gmail Notification 
+The prototype will include Gmail notifications where applicable. The admin 
+will receive customer details and payment receipt information, while the client 
+will receive a receipt and thank-you email after completing the process. 
+4.1.9. Client Testing 
+The prototype will be tested with at least 10 small business clients to collect 
+feedback on usability, package understanding, form completion, and overall 
+experience. 
+4.2. OUT OF SCOPE 
+The prototype will not include the following features: 
+4.2.1. User Account System 
+The prototype will not include login, logout, registration, or a customer 
+dashboard. 
+4.2.2. Full Custom Database 
+The prototype will not include a full custom database. Stripe metadata will be 
+used as a simple storage method for the current project scope. 
+
+--- PAGE 13 ---
+6 
+ 
+4.2.3. Full Website Redesign 
+The prototype will not redesign existing websites or change layouts under Core 
+Reborn. It only focuses on one-to-one duplication and basic SEO. 
+4.2.4. Website Creation from Zero 
+The prototype will not support users without an existing website. 
+4.2.5. Advanced SEO Services 
+The prototype will not include advanced SEO, custom SEO plans, guaranteed 
+Google ranking, or guaranteed sales. 
+4.2.6. Multiple Websites Under One Plan 
+The prototype will not allow one package to cover multiple websites. One 
+package applies to one website only. 
+4.2.7. Overbuilt or Paid System Setup 
+The prototype will avoid unnecessary paid tools or complex infrastructure. The 
+system will follow a zero-dollar or minimal-cost approach where possible. 
+4.2.8. Advanced Tracking or Campaign Management 
+The prototype will not include advanced tracking, campaign management, or 
+detailed advertising performance analysis. It only includes basic GTM and GA4 
+setup where applicable. 
+ 
+ 
+  
+
+--- PAGE 14 ---
+7 
+ 
+5. SYSTEM OVERVIEW / ARCHITECTURE 
+5.1. SYSTEM OVERVIEW 
+SiteTarik works as a simple web and mobile -based system for small business owners 
+with existing websites. The user fills in the main form, selects either Core Reborn or 
+SEO Enhancement, completes payment, and receives updates through WhatsApp. For 
+Core Reborn, the system supports one-to-one website duplication with basic SEO. For 
+SEO Enhancement, the system also collects blog details through the Blog Brief form 
+and supports blog content planning for long-term visibility. 
+5.2. SYSTEM ARCHITECTURE 
+SiteTarik consists of six main components: frontend, backend, data storage, external 
+tools and APIs, hosting platform, and notification system. 
+5.2.1. Frontend 
+The frontend will be built using Next.js for the web platform. It will include the 
+landing page, customer form, package selection, payment flow, Blog Brief page, 
+and Thank You page. A simple mobile application prototype will also be 
+included to display project or submission information clearly. 
+5.2.2. Backend 
+The backend will handle form submission, package selection, payment flow, 
+Blog Brief submission, and order confirmation. It will also help manage the 
+flow between the landing page, Stripe payment, Blog Brief page, Thank You 
+page, and WhatsApp delivery. 
+5.2.3. Data Storage 
+The prototype will use Stripe metadata as a simple storage method for customer 
+details, website information, package selection, blog brief details, and delivery 
+status. This is suitable for the current project scope because SiteTarik is 
+designed as a simple and low-cost prototype. 
+  
+
+--- PAGE 15 ---
+8 
+ 
+5.2.4. External Tools and APIs 
+Stripe will be used for payment, WhatsApp will be used for chatbot guidance 
+and delivery updates, and Cloudflare will be used to host the final website 
+output. Google Search Console may be used to monitor search visibility, while 
+GTM and GA4 may be used to track user actions for evaluation (Google Search 
+Console, n.d.; Google Tag Manager Help, n.d.). Playwright may also be used to 
+read existing website content (P laywright, n.d.) and support one -to-one 
+duplication. 
+5.2.5. Hosting Platform 
+Cloudflare will be used as the hosting platform for the final website output. 
+After the website is duplicated and basic SEO is added, the final version will be 
+hosted on Cloudflare , and the delivery link will be sent to the user through 
+WhatsApp. 
+5.2.6. Notification System 
+The notification system will use the Gmail API where applicable. For Core 
+Reborn, the admin and client will receive email notifications after payment is 
+completed. For SEO Enhancement, the admin and client will receive email 
+notifications after the Blog Brief form is submitted, including the relevant 
+customer, payment, and blog brief details. 
+
+--- PAGE 16 ---
+9 
+ 
+5.3. SYSTEM FLOW 
+ 
+Figure 1: SiteTarik System Flow 
+The system flow of SiteTarik is as follows: 
+1. User Visits the Landing Page 
+The user visits the SiteTarik landing page and reads the package information. 
+2. User Submits Website Details 
+The user fills in the form with business details, website URL, package 
+selection, and WhatsApp consent. 
+3. System Records Submission 
+The system records the submitted information using Stripe metadata and guides 
+the user to payment. 
+4. Core Reborn Payment Flow 
+If the user selects Core Reborn, the user completes payment and is redirected 
+to the Thank You page. The system sends a Gmail notification to the admin 
+with the submitted details and payment receipt. The client also receives a 
+receipt and thank-you email. 
+
+
+--- PAGE 17 ---
+10 
+ 
+5. SEO Enhancement Payment Flow 
+If the user selects SEO Enhancement, the user completes payment and is 
+redirected to the Blog Brief form. 
+6. Blog Brief Submission 
+The system stores the blog brief details for blog content planning and delivery. 
+After the Blog Brief form is submitted, the system sends a Gmail notification 
+to the admin with the customer details, blog brief details, and payment receipt. 
+The client also receives a receipt and thank-you email. 
+7. Administrator Review 
+The SiteTarik administrator reviews the submitted details and prepares the 
+website duplication or blog content process. 
+8. Final Delivery 
+The final website is hosted on Cloudflare, and the delivery link and order 
+updates are sent to the user through WhatsApp. 
+  
+
+--- PAGE 18 ---
+11 
+ 
+6. METHODOLOGY 
+6.1. DEVELOPMENT APPROACH 
+This project will use the Spiral development approach. This approach is suitable for 
+SiteTarik because the system has several connected parts, including the web platform, 
+mobile application prototype, Stripe payment flow, Stripe metadata storage, Blog Brief 
+form, website duplication, Cloudflare hosting, and WhatsApp-based delivery (Boehm 
+& Hansen, 2001). 
+The Spiral approach allows each part of the system to be planned, developed, tested, 
+and improved in stages (Boehm, 1988). This is important because possible issues such 
+as form errors, payment problems, unclear package selection, incomplete blog details, 
+and website duplication accuracy can be identified early (Boehm, 1988; Boehm & 
+Hansen, 2001). 
+Overall, the Spiral approach is chosen because it supports gradual development, risk 
+checking, and continuous improvement (Boehm, 1988; Boehm & Hansen, 2001). This 
+aligns with CLO1 because the project focuses on designing a practical solution for 
+managing digital content for small businesses. 
+6.2. DEVELOPMENT PHASES 
+The development of this project is divided into five main phases: planning, design, 
+development, testing, and evaluation.  
+6.2.1. Planning Phase 
+The planning phase will identify the project problem, objectives, target users, 
+system scope, and main requirements. This phase ensures that SiteTarik is 
+focused on helping small businesses manage existing website content, basic 
+SEO, blog content support, basic GTM and GA4 setup, and WhatsApp -based 
+delivery. 
+6.2.2. Design Phase 
+The design phase will prepare the system flow, web platform layout, mobile 
+application prototype, form structure, payment flow, data storage plan, and user 
+journey. This phase ensures that the system is simple, clear, and suitable for 
+small business users. 
+
+--- PAGE 19 ---
+12 
+ 
+6.2.3. Development Phase 
+The development phase will build the main SiteTarik prototype. This includes 
+the landing page, customer form, package selection, Stripe payment flow, Blog 
+Brief form, Thank You page, Stripe metadata storage, Gmail notification, 
+WhatsApp chatbot guidance, and Cloudflare hosting setup. 
+6.2.4. Testing Phase 
+The testing phase will check whether the main functions work properly. This 
+includes testing the form submission, payment flow, Blog Brief form, data 
+storage, Gmail notification, website duplication process, basic SEO support, 
+basic GTM and GA4 setup, and WhatsApp delivery flow. 
+6.2.5. Evaluation Phase 
+The evaluation phase will test the prototype with at least 10 small business 
+clients. Their feedback will be collected to evaluate usability, package 
+understanding, form completion, and overall experience before the final 
+presentation. 
+Overall, these phases support gradual development and continuous improvement 
+throughout the project. 
+
+--- PAGE 20 ---
+11 
+ 
+6.3. TIMELINE 
+Task  
+Week 
+1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 
+Problem identification and project proposal 
+planning 
+                  
+Target user, use case, and scope planning                   
+Web platform interface design                   
+Mobile application prototype design                   
+Data storage and Stripe metadata planning                   
+Landing page, customer form, and package 
+selection development 
+                  
+WhatsApp consent and delivery guidance setup                   
+Stripe payment flow and Stripe metadata storage 
+development 
+                  
+Thank You page and Blog Brief form development                   
+Blog Content Planning, CTA Placement, Basic 
+SEO, and Tracking Setup 
+                  
+Cloudflare hosting and final delivery setup                    
+Mobile application prototype development                   
+System testing, chatbot setup, error fixing, and 
+improvement 
+                  
+
+--- PAGE 21 ---
+12 
+ 
+Client testing, feedback collection, and data analysis                   
+Final improvement, report writing, presentation, and 
+submission 
+                  
+Table 1: Gantt Chart of Project Timeline 
+The project begins with proposal planning in Week 1, followed by target user, use case, and scope planning in Week 2. System design is carried 
+out from Week 3 to Week 7, including the web interface, mobile prototype, and Stripe metadata planning. Development runs from Week 8 to Week 
+14, covering the landing page, form, package selection, WhatsApp flow, payment flow, Blog Brief form, basic SEO, GTM and GA4 se tup, 
+Cloudflare hosting, and mobile prototype development. System testing, chatbot setup, and improvement are completed in Week 15. Client testing, 
+feedback collection, final improvement, report writing, presentation preparation, and submission are completed from Week 16 to Week 18.
+
+--- PAGE 22 ---
+13 
+ 
+7. TOOLS AND TECHNOLOGIES 
+7.1. DEVELOPMENT TOOLS 
+The tools and technologies planned for SiteTarik are as follows: 
+7.1.1. Programming Language 
+• JavaScript/TypeScript – To develop the web platform logic, user interface 
+behaviour, form handling, and system flow. 
+7.1.2. Web Framework 
+• Next.js – To develop the SiteTarik web platform, including the landing page, 
+payment flow, Blog Brief page, and Thank You page. 
+7.1.3. Mobile Application Tool 
+• Mobile App Tool – To design and develop the mobile application prototype. 
+The tool will be selected based on project suitability. 
+7.1.4. Data Storage 
+• Stripe Metadata  - To store simple order details (Stripe, n.d. ) such as 
+customer information, website URL, selected package, blog brief details, 
+and delivery status. 
+7.1.5. Payment Tool 
+• Stripe – To handle payment flow and support order data storage through 
+Stripe metadata (Stripe, n.d.) 
+7.1.6. Communication and Delivery Tool 
+• WhatsApp – To support chatbot guidance, customer updates, and final 
+delivery (WhatsApp Business, n.d.). 
+7.1.7. Hosting Platform 
+• Cloudflare – To host the final duplicated website output and provide the 
+delivery link to the user (Cloudflare Docs, 2026). 
+7.1.8. Tracking and Analytics Tools 
+• Google Search Console - To monitor website visibility and indexing, where 
+applicable (Google Search Console Help, n.d.). 
+
+--- PAGE 23 ---
+14 
+ 
+• Google Tag Manager  - To manage tracking events on the SiteTarik 
+platform and client websites where applicable  (Google Tag Manager Help, 
+n.d.). 
+• Google Analytics 4 – To analyse user actions such as form activity, package 
+selection, conversion flow, and client website activity where applicable  
+(Google Analytics Help, n.d.). 
+7.1.9. Version Control Tool 
+• GitHub – To manage source code, version control, project history, and 
+backup (GitHub Docs, n.d.). 
+7.1.10. Notification Tool 
+• Gmail API – To send admin and client email notifications after payment or 
+Blog Brief submission (Google for Developers, 2026). 
+7.1.11. Website Inspection Tool 
+• Playwright – To read existing website content (Playwright, n.d.)  and 
+support one-to-one duplication. 
+7.1.12. AI-Assisted Development Tool 
+• Codex – To assist with prompts, coding, debugging, and improvement  
+(OpenAI Developers, n.d.). 
+  
+
+--- PAGE 24 ---
+15 
+ 
+7.2. JUSTIFICATION 
+The tools and technologies selected for this project were chosen based on the system 
+requirements, project scope, and the need to develop a practical prototype within one 
+semester. 
+7.2.1. JavaScript/TypeScript 
+- JavaScript or TypeScript is suitable because it can support the development 
+of the web platform, form behaviour, payment flow, and user interaction  
+(MDN Web Docs, n.d.; TypeScript, n.d.). 
+7.2.2. Next.js 
+- Next.js is chosen because it is suitable for building the SiteTarik web 
+platform, including the landing page, customer form, Blog Brief page, and 
+Thank You page. 
+7.2.3. Mobile App Tool 
+- A suitable mobile app tool will be selected to create the mobile application 
+prototype. This is needed because the project requires a mobile app 
+component. 
+7.2.4. WhatsApp 
+- WhatsApp is used because it is familiar and commonly used by Malaysian 
+small business owners (Kahar & Habil, 2018). It supports chatbot guidance, 
+customer updates, and final delivery (WhatsApp Business, n.d.). 
+7.2.5. Cloudflare 
+- Cloudflare is chosen as the hosting platform because it can host the final 
+duplicated website output and provide the delivery link to the user  
+(Cloudflare Docs, 2026). 
+7.2.6. Google Search Console 
+- Google Search Console is used to monitor whether the website pages are 
+visible and indexed, where applicable. This supports basic search visibility 
+monitoring (Google Search Console Help, n.d.). 
+
+--- PAGE 25 ---
+16 
+ 
+7.2.7. Google Tag Manager 
+- Google Tag Manager is used to manage tracking events on the SiteTarik 
+platform, such as form activity, package selection, and button clicks. For 
+client websites, it can also track key actions such as form submissions, 
+WhatsApp clicks, call clicks, Facebook  clicks, Waze clicks, and Google 
+Maps clicks, where applicable (Google Tag Manager Help, n.d.). 
+7.2.8. Stripe 
+- Stripe is chosen because it provides a practical and widely used payment 
+solution for handling service payments in the prototype (Stripe, n.d.; Webb, 
+2025). 
+7.2.9. Google Analytics 4 
+- Google Analytics 4 is used to analyse user actions and conversion flow on 
+both SiteTarik and client websites. This helps evaluate how users complete 
+forms, select packages, and take important actions after the website is 
+delivered (Google Analytics Help, n.d.). 
+7.2.10. GitHub 
+- GitHub is used for version control, project backup, and source code 
+management. It helps track changes and restore earlier versions if needed  
+(GitHub Docs, n.d.). 
+7.2.11. Gmail API 
+- Gmail API is used to send email notifications to the admin and client. It 
+helps the admin receive order details, while the client receives the payment 
+receipt and thank-you confirmation (Google for Developers, 2026). 
+7.2.12. Playwright 
+- Playwright is used to read existing website content and inspect website 
+structure (Playwright, n.d.) . This supports the one -to-one website 
+duplication process. 
+
+--- PAGE 26 ---
+17 
+ 
+7.2.13. Codex 
+- Codex is used as an AI -assisted development tool to help with coding, 
+debugging, and improvement. It supports faster development while still 
+requiring review and testing (OpenAI Developers, n.d.) 
+Overall, these tools support a simple, low-cost prototype for web, mobile, data storage, 
+payment, tracking, hosting, and delivery. This aligns with CLO1 by supporting digital 
+content management. 
+8. EV ALUATION CRITERIA 
+8.1. TESTING METHODS 
+The prototype will be evaluated through functional testing and usability testing to 
+check whether the system works properly and is suitable for users. 
+8.1.1. Functional Testing 
+Functional testing will be used to check whether the main features work 
+correctly. This includes testing the customer form, package selection, Stripe 
+payment flow, Stripe metadata storage, Blog Brief form, Thank You page, 
+Gmail notification, WhatsApp chatb ot guidance, Cloudflare hosting, and final 
+delivery process. 
+8.1.2. Usability Testing 
+Usability testing will be used to check whether users can understand and 
+complete the SiteTarik process easily. This includes checking whether users can 
+understand the package options, complete the form, follow the payment process, 
+and know what happens after submission. 
+8.1.3. Delivery Flow Testing 
+Delivery flow testing will be used to check whether the final website link and 
+order updates can be sent through WhatsApp. This ensures that the handoff 
+process is clear and practical for users. 
+  
+
+--- PAGE 27 ---
+18 
+ 
+8.2. USER EV ALUATION 
+The prototype will be tested with at least 10 small business clients who already have 
+existing websites. The users will provide feedback on the clarity of the platform, ease 
+of form completion, package understanding, payment flow, Blog Brief form, 
+WhatsApp delivery process, and overall experience. Their feedback will be used to 
+improve the prototype and evaluate whether SiteTarik helps solve the problem of 
+managing existing website content. 
+8.3. SUCCESS CRITERIA 
+The success of the prototype will be measured based on clear indicators that show 
+whether the system works properly and supports digital content management 
+effectively. 
+8.3.1. Form Completion 
+The project will be considered successful if users can complete the main form 
+with their business details, website URL, package selection, and WhatsApp 
+consent without major issues. 
+8.3.2. Payment and Confirmation 
+Users should be able to complete the payment flow and receive a clear 
+confirmation after payment. 
+8.3.3. Blog Brief Submission 
+SEO Enhancement users should be able to submit the Blog Brief form 
+successfully for blog content planning. 
+8.3.4. Data Storage 
+The system should be able to store order details using Stripe metadata, including 
+customer details, website information, package selection, and blog brief details. 
+8.3.5. WhatsApp Delivery 
+The system should support website delivery and order updates through 
+WhatsApp. 
+8.3.6. Client Testing 
+The prototype should be tested with at least 10 small business clients. 
+
+--- PAGE 28 ---
+19 
+ 
+8.3.7. User Feedback 
+The feedback should show that users understand the platform and find it useful 
+for managing existing website content. 
+8.3.8. Gmail Notification 
+The system should send email notifications to the admin and client after 
+payment or Blog Brief submission, where applicable. 
+9. CONCLUSION / JUSTIFICATION 
+9.1. SUMMARY OF PROPOSAL 
+SiteTarik is proposed as a digital content management platform for Malaysian small 
+business owners who already have existing websites. The main problem is that many 
+small businesses struggle to maintain website content, basic SEO, blog content 
+(SBDCNet, 2025; Riserbato, 2026), and tracking setup because it requires time, cost, 
+and regular effort (Restrepo -Morales et al., 2024). SiteTarik solves this problem by 
+providing a simple web and mobile -based system that supports website duplication, 
+basic SEO, blog cont ent planning, basic GTM and GA4 setup, payment flow, data 
+storage using Stripe metadata (Stripe, n.d.), and WhatsApp-based delivery. 
+9.2. PROJECT JUSTIFICATION 
+This project is worth developing because it helps small business owners manage their 
+existing website content in a simpler and more affordable way. The system supports 
+digital content management by collecting customer details, storing submission 
+information, supporting basic SEO, collecting blog content details, setting up basic 
+GTM and GA4 tracking, and helping users receive website delivery through 
+WhatsApp. It also supports the project objectives by including a web platform, mobile 
+application prototype, data storage, and client testing with at least 10 small business 
+clients. This aligns with CLO1 because SiteTarik is designed as a practical solution to 
+a real problem in managing digital content. 
+  
+
+--- PAGE 29 ---
+20 
+ 
+10. REFERENCES 
+Boehm, B. W. (1988). A spiral model of software development and enhancement. 
+Computer, 21(5), 61–72. https://doi.org/10.1109/2.59 
+Boehm, B., & Hansen, W. J. (2001). The spiral model as a tool for evolutionary acquisition. 
+CrossTalk: The Journal of Defense Software Engineering, 14 (5), 4 –11. 
+https://acs.ist.psu.edu/ist521/papers/boehmH01.pdf 
+Campbell, A. (2018, April 11). 5 essential pages for your small business website . U.S. 
+Small Business Administration. https://www.sba.gov/blog/5-essential-pages-your-small-
+business-website 
+Cloudflare. (2026, April 21). Cloudflare Pages . Cloudflare Docs. 
+https://developers.cloudflare.com/pages/ 
+Cloudflare. (2026, April 21). Preview deployments . Cloudflare Docs. 
+https://developers.cloudflare.com/pages/configuration/preview-deployments/ 
+GitHub. (n.d.). About Git . GitHub Docs. Retrieved May 23, 2026, from 
+https://docs.github.com/en/get-started/using-git/about-git 
+GitHub. (n.d.). About repositories . GitHub Docs. Retrieved May 23, 2026, from 
+https://docs.github.com/en/repositories/creating-and-managing-repositories/about-
+repositories 
+GitHub. (n.d.). Backing up a repository . GitHub Docs. Retrieved May 23, 2026, from 
+https://docs.github.com/en/repositories/archiving-a-github-repository/backing-up-a-
+repository 
+Godreau, J. (2025, November 18). Do I need a website for my business? Here’ s why 2025 
+says yes. Clutch. https://clutch.co/resources/do-i-need-website-my-business-2025-data 
+Google Analytics Help. (n.d.). About events . Google. Retrieved May 23, 2026, from 
+https://support.google.com/analytics/answer/9322688?hl=en 
+Google Analytics Help. (n.d.). How to measure key events with Google Analytics. Google. 
+Retrieved May 23, 2026, from 
+http://support.google.com/analytics/answer/12946393?hl=en 
+
+--- PAGE 30 ---
+21 
+ 
+Google for Developers. (2026, March 25). Tagging for Google Analytics . Google.  
+https://developers.google.com/analytics/devguides/collection/ga4/tag-options 
+Google for Developers. (2026, April 20). Create and send email messages . Google. 
+https://developers.google.com/workspace/gmail/api/guides/sending 
+Google Search Central. (2025, December 10). Search engine optimization (SEO) starter 
+guide. Google for Developers. 
+https://developers.google.com/search/docs/fundamentals/seo-starter-guide 
+Google Search Console Help. (n.d.). About Search Console . Google. Retrieved May 23, 
+2026, from https://support.google.com/webmasters/answer/9128668?hl=en 
+Google Tag Manager Help. (n.d.). Set up Google Analytics events in Tag Manager. Google. 
+Retrieved May 23, 2026, from 
+https://support.google.com/tagmanager/answer/13034206?hl=en 
+Iqbal, M., Noman, M., Talpu, S. R., Manzoor, A., & Abid, M. M. (2020). An empirical 
+study of popular content management system —WordPress vs Drupal vs Joomla. ICTACT 
+Journal on Management Studies, 6 (2), 1214 –1219. 
+https://doi.org/10.21917/ijms.2020.0168 
+Kahar, R., & Habil, H. (2018). Communication patterns of Malaysian SME interactions 
+using WhatsApp. In Proceedings of LSP -GABC 2018 (pp. 65–69). Universiti Teknologi 
+Malaysia. https://seminar.utmspace.edu.my/lspgabc2018/Doc/12.pdf 
+Masoner, L. (2026, January 19). How much does a website cost? (2026 guide) . Forbes 
+Advisor. https://www.forbes.com/advisor/business/software/how-much-does-a-website-
+cost/ 
+MDN Web Docs. (n.d.). JavaScript. Mozilla. Retrieved May 23, 2026, from 
+https://developer.mozilla.org/en-US/docs/Web/JavaScript 
+Next.js. (n.d.). Next.js docs. Retrieved May 23, 2026, from https://nextjs.org/docs 
+OpenAI. (n.d.). Best practices . OpenAI Developers. Retrieved May 23, 2026, from 
+https://developers.openai.com/codex/learn/best-practices 
+OpenAI. (n.d.). Codex. OpenAI Developers. Retrieved May 23, 2026, from  
+https://developers.openai.com/codex 
+
+--- PAGE 31 ---
+22 
+ 
+OpenAI. (n.d.). Codex web . OpenAI Developers. Retrieved May 23, 2026, from 
+https://developers.openai.com/codex/cloud 
+Playwright. (n.d.). Locator. Retrieved May 23, 2026, from 
+https://playwright.dev/docs/api/class-locator 
+Restrepo-Morales, J. A., Ararat-Herrera, J. A., López-Cadavid, D. A., & Camacho-Vargas, 
+A. (2024). Breaking the digitalization barrier for SMEs: A fuzzy logic approach to 
+overcoming challenges in business transformation. Journal of Innovation and 
+Entrepreneurship, 13 , Article 84.  https://link.springer.com/article/10.1186/s13731-024-
+00429-w 
+Riserbato, R. (2026, April 22). SEO tips to help your content catch leads [Expert advice]. 
+HubSpot Blog. https://blog.hubspot.com/marketing/seo-tips 
+SBDCNet. (2025, April 8). Website design for small business . 
+https://www.sbdcnet.org/small-business-information-center/website-design-for-small-
+business/ 
+Stripe. (n.d.). Build a payments page . Retrieved May 23, 2026, from 
+https://docs.stripe.com/payments/checkout 
+Stripe. (n.d.). Metadata. Retrieved May 23, 2026, from https://docs.stripe.com/metadata 
+Sutherland, K., Mulcahy, R., Burgess, J., Lawley, M., & Fox, D. (2025). Digital marketing 
+outsourcing relationships between SMEs and service providers: An agency theory 
+perspective. Australasian Marketing Journal, 33 (3), 231 –243. 
+https://journals.sagepub.com/doi/10.1177/14413582241303978 
+TypeScript. (n.d.). JavaScript with syntax for types . Retrieved May 23, 2026, from 
+https://www.typescriptlang.org/ 
+University of California, Office of the President. (n.d.). SMART goals: A how -to guide  
+(Version 2). https://www.ucop.edu/local-human-resources/_files/performance-
+appraisal/How+to+write+SMART+Goals+v2.pdf 
+Webb, E. (2025, April 11). Stripe’s CEO has customers join manager meetings to share 
+feedback — and Elon Musk says it’s a “good idea.” Business Insider .  
+https://www.businessinsider.com/stripe-ceo-patrick-collison-customer-feedback-elon-
+musk-2025-4 
+
+--- PAGE 32 ---
+23 
+ 
+WhatsApp Business. (n.d.). WhatsApp Business Platform. Retrieved May 23, 2026, from 
+https://whatsappbusiness.com/products/business-platform/ 

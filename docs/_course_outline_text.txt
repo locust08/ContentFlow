@@ -1,0 +1,285 @@
+--- PAGE 1 ---
+UNIVERSITI TEKNOLOGI MARA 
+COURSE INFORMATION 
+Confidential 
+Course Code : ICM658 
+Course Name (English) : " DIGITAL INFORMATION CONTENT MANAGEMENT PROJECT" APPROVED
+Course Name (Malay) : PROJEK PENGURUSAN KANDUNGAN MAKLUMAT DIGITAL
+Course Level : 6 - Bachelors Degree
+SLT : 320 Hours
+  Equivalent to 8 Credits
+  Face to Face: 4 Hours
+  Non Face to Face: 17 Hours
+  Student Preparation Time: 299 Hours
+Pre-Requisite Courses : No course recommendations
+Co-requisite Courses : No co-requisite Courses listed
+Equivalent Courses : INFORMATION SYSTEM DEVELOPMENT FOR DIGITAL CONTENT (ICM665)
+Teaching Period Duration : 17 Weeks
+Resource Person : HUSAIN BIN HASHIM 
+National Education Code : (322)Library, information, archive 
+Delivery Period Duration : 1 Semester
+Faculty Name : COLLEGE OF COMPUTING, INFORMATICS AND MATHEMATICS Start Year : 2023
+© Copyright Universiti Teknologi MARA Review Year : 2023
+
+--- PAGE 2 ---
+Course Learning Outcomes
+At the end of the course, students should be able to: 
+Design a solution to the problem in managing digital content. ( C6  )1.
+ Construct an information system prototype for digital content management. ( P3  )2.
+ Present the final version of the prototype. ( A2  )3.
+ Compose a written report on the design and construction of the prototype. ( P7  )4.
+Course Description
+This course implements Capstone Design, which involves the application of knowledge and skills acquired throughout the
+programme's curriculum, comprising the following major components: web programming, mobile app development, and
+database design. Students are expected to develop and build a prototype of an information system for managing digital
+content in an organization that fulfils each component. Additionally, a data analysis tool will be used to query and analyse
+data from the completed prototype. This course also promotes the adoption of elements such as IoT, virtual reality, and
+augmented reality into the development of information systems.
+Syllabus Content
+1. Introduction to capstone project 
+Course requirements
+Learning outcomes
+Roles and responsibilities of supervisors and students
+2. Proposal and supervision 
+Proposal writing
+Approval of proposal
+Progress reporting
+3. Design and construction of an information system prototype for digital content 
+Business process
+Business rules
+Database design
+Interface design: web and mobile applications
+System testing and debugging
+4. Utilisation of data analysis tool 
+Analysis of data from prototype
+Querying and reporting of data
+5. Presentation and documentation 
+Presentation and demonstration of prototype
+Documentation of project report
+Teaching Methodologies
+Problem-based Learning
+Project-based Learning
+Self-directed Learning
+Supervision
+Proposed % Marks Approved by KPP
+Question Difficulty Levels Range
+Faculty Name : COLLEGE OF COMPUTING, INFORMATICS AND MATHEMATICS Start Year : 2023
+© Copyright Universiti Teknologi MARA Review Year : 2023
+
+--- PAGE 3 ---
+C5 - C6 20 - 60
+Assessment
+Continuous
+Assessment:
+100.00% 
+Final Project - 40% out of 40 on Week 14. Passing Mark(s): 20 
+Development of an information system prototype and analysis of data using an appropriate
+tool. 
+CLO: 2 
+Presentation - 10% out of 10 on Week 14. Passing Mark(s): 5 
+Presentation of the final/finished version of prototype. 
+CLO: 3 
+Proposal Report - 20% out of 20 on Week 5. Passing Mark(s): 10 
+Project proposal to solve problems related to managing digital content. 
+CLO: 1 
+Written Report - 30% out of 30 on Week 14. Passing Mark(s): 15 
+Compilation of all relevant information/contents and report on the final project. 
+CLO: 4 
+Transferable Skills
+Digital Skills Communication Skills Ethics and Professionalism
+Special Regulation
+This Module has no special regulation
+Reassessment Requirement
+This Module has no Reassessment Requirement
+Reassessment Description
+This Module has no Reassessment Description
+Recommended Text
+This module does not have any recommended text
+References
+Dr. Madhavi Vaidya, RDBMS In-Depth, BPB Publications, 2021, ISBN: 81948377071.
+Carlos Coronel,Steven Morris, Database Systems: Design, Implementation, & Management, 13th, Cengage Learning,
+2018, ISBN: 1337627909
+2.
+David Wolber,Hal Abelson,Ellen Spertus,Liz Looney, App Inventor 2, "O'Reilly Media, Inc.", 2014, ISBN: 14919072313.
+Other References
+n/a, PhpMyAdmin, n/a, URL: https://www.phpmyadmin.net1.
+n/a, MySQL Tutorial, n/a, URL: https://www.w3schools.com/MySQL/2.
+n/a, Kodular, n/a, URL: https://www.kodular.io/3.
+n/a, SAS resources, n/a, URL: https://www.sas.com/en_my/solutions/ai/resources.html4.
+Faculty Name : COLLEGE OF COMPUTING, INFORMATICS AND MATHEMATICS Start Year : 2023
+© Copyright Universiti Teknologi MARA Review Year : 2023
+
+--- PAGE 4 ---
+Course Extra Information
+This Module has no extra information
+Faculty Name : COLLEGE OF COMPUTING, INFORMATICS AND MATHEMATICS Start Year : 2023
+© Copyright Universiti Teknologi MARA Review Year : 2023
+
+--- PAGE 5 ---
+COURSE LEARNING OUTCOMES - MOE LEARNING OUTCOMES - SOFT SKILLS LEARNING OUTCOMES RELATIONSHIP MATRIX
+COURSE CODE ICM658 FACULTY / ACADEMY COLLEGE OF COMPUTING, INFORMATICS AND MATHEMATICS
+COURSE NAME (IN ENGLISH) " DIGITAL INFORMATION CONTENT MANAGEMENT PROJECT" CREDIT UNIT 8
+COURSE NAME (IN MALAY) PROJEK PENGURUSAN KANDUNGAN MAKLUMAT DIGITAL Resource Person HUSAIN BIN HASHIM 
+ Achievement of MOHE Learning Outcomes(LO) Achievement of Soft Skills Learning
+Outcomes(SS)
+Course Learning Outcomes
+(CLO)
+1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 1 2 3 4 5 6 7 
+CLO1 Design a solution to
+the problem in
+managing digital
+content. 
+( C6 ) 
+  /                                             
+CLO2 Construct an
+information system
+prototype for digital
+content management. 
+( P3 ) 
+    /                                           
+CLO3 Present the final
+version of the
+prototype. 
+( A2 ) 
+        /                           /           
+Archievement of MOHE Learning Outcomes
+Knowledge and Understanding (MQF2.0 - PLO1)1.
+Cognitive (MQF2.0 - PLO2)2.
+Practical Skills (MQF2.0 - PLO3)3.
+Interpersonal Skills (MQF2.0 - PLO4)4.
+Communication Skills (MQF2.0 - PLO5)5.
+Digital Skills (MQF2.0 - PLO6)6.
+Numeracy Skills (MQF2.0 - PLO7)7.
+Leadership,autonomy and responsibility (MQF2.0 - PLO8)8.
+Personal Skills (MQF2.0 - PLO9)9.
+Entrepreneurial skills (MQF2.0 - PLO10)10.
+Ethics and Professionalism (MQF2.0 - PLO11)11.
+Thinking and Scientific Skills12.
+Social skills, Teamwork and Responsibilities13.
+Values, Ethics, Moral and Professionalism14.
+Information Management and Life Long Learning15.
+Management and Entrepreneurship16.
+Leadership Skills17.
+Soft Skills Learning Outcomes
+Critical Thinking and Problem-solving Skills1.
+Communication Skills2.
+Team Skills3.
+Ethics & Moral Professionalism4.
+Life-long Learning & Information Management5.
+Entrepreneurial Skills6.
+Leadership Skills7.
+Faculty Name : COLLEGE OF COMPUTING, INFORMATICS AND MATHEMATICS Start Year : 2023
+© Copyright Universiti Teknologi MARA Review Year : 2023
+UNIVERSITY TEKNOLOGI MARA
+
+--- PAGE 6 ---
+  Achievement of MOHE Learning Outcomes(LO) Achievement of Soft Skills Learning
+Outcomes(SS)
+Course Learning Outcomes
+(CLO)
+1  2  3  4  5  6  7  8  9  10  11  12  13  14  15  16  17  1  2  3  4  5  6  7 
+CLO4 Compose a written
+report on the design
+and construction of
+the prototype. 
+( P7 ) 
+          /                       /             
+Archievement of MOHE Learning Outcomes
+Knowledge and Understanding (MQF2.0 - PLO1)1.
+Cognitive (MQF2.0 - PLO2)2.
+Practical Skills (MQF2.0 - PLO3)3.
+Interpersonal Skills (MQF2.0 - PLO4)4.
+Communication Skills (MQF2.0 - PLO5)5.
+Digital Skills (MQF2.0 - PLO6)6.
+Numeracy Skills (MQF2.0 - PLO7)7.
+Leadership,autonomy and responsibility (MQF2.0 - PLO8)8.
+Personal Skills (MQF2.0 - PLO9)9.
+Entrepreneurial skills (MQF2.0 - PLO10)10.
+Ethics and Professionalism (MQF2.0 - PLO11)11.
+Thinking and Scientific Skills12.
+Social skills, Teamwork and Responsibilities13.
+Values, Ethics, Moral and Professionalism14.
+Information Management and Life Long Learning15.
+Management and Entrepreneurship16.
+Leadership Skills17.
+Soft Skills Learning Outcomes
+Critical Thinking and Problem-solving Skills1.
+Communication Skills2.
+Team Skills3.
+Ethics & Moral Professionalism4.
+Life-long Learning & Information Management5.
+Entrepreneurial Skills6.
+Leadership Skills7.
+Faculty Name : COLLEGE OF COMPUTING, INFORMATICS AND MATHEMATICS Start Year : 2023
+© Copyright Universiti Teknologi MARA Review Year : 2023
+
+--- PAGE 7 ---
+COURSE LEARNING OUTCOMES - TAXONOMY LEVELS
+COURSE CODE ICM658 FACULTY / ACADEMY COLLEGE OF COMPUTING, INFORMATICS AND MATHEMATICS
+COURSE NAME (IN ENGLISH) " DIGITAL INFORMATION CONTENT MANAGEMENT PROJECT" CREDIT UNIT 8
+COURSE NAME (IN MALAY) PROJEK PENGURUSAN KANDUNGAN MAKLUMAT DIGITAL Resource Person HUSAIN BIN HASHIM 
+COURSE OUTCOMES
+COGNITIVE PSYCHOMOTOR AFFECTIVE
+C1 C2 C3 C4 C5 C6 P1 P2 P3 P4 P5 P6 P7 A1 A2 A3 A4 A5
+1
+Design a solution to the problem in
+managing digital content. 
+( C6 ) 
+/ 
+2
+Construct an information system prototype
+for digital content management. 
+( P3 ) 
+/ 
+3 Present the final version of the prototype. 
+( A2 ) / 
+4
+Compose a written report on the design
+and construction of the prototype. 
+( P7 ) 
+/ 
+Faculty Name : COLLEGE OF COMPUTING, INFORMATICS AND MATHEMATICS Start Year : 2023
+© Copyright Universiti Teknologi MARA Review Year : 2023
+UNIVERSITY TEKNOLOGI MARA
+
+--- PAGE 8 ---
+COURSE OUTCOMES
+COURSE CODE ICM658 FACULTY / ACADEMY COLLEGE OF COMPUTING, INFORMATICS AND MATHEMATICS
+COURSE NAME (IN ENGLISH) " DIGITAL INFORMATION CONTENT MANAGEMENT PROJECT" CREDIT UNIT 8
+COURSE NAME (IN MALAY) PROJEK PENGURUSAN KANDUNGAN MAKLUMAT DIGITAL Resource Person HUSAIN BIN HASHIM 
+COURSE LEARNING OUTCOMES
+ACHIEVEMENT OF MOE LEARNING OUTCOMES TEACHING
+METHODOLOGY ASSESSMENT
+1 10 2 11 4 12 16 13 14 15 17 3 5 6 7 8 9
+1 
+Design a solution to the
+problem in managing digital
+content.
+/ 
+Lecture
+Blended Learning
+(Guided Non F2F)
+Proposal Report
+2 
+Construct an information
+system prototype for digital
+content management.
+/ 
+Lecture
+Project
+Final Project
+3 Present the final version of the
+prototype. / Lecture
+Presentation
+Presentation
+4 
+Compose a written report on
+the design and construction of
+the prototype.
+/ 
+Lecture
+Presentation
+Written Report
+Faculty Name : COLLEGE OF COMPUTING, INFORMATICS AND MATHEMATICS Start Year : 2023
+© Copyright Universiti Teknologi MARA Review Year : 2023
+UNIVERSITY TEKNOLOGI MARA

@@ -1,0 +1,134 @@
+--- SLIDE 1 ---
+Taklimat ICM658 (Capstone)
+Tn Hj Amzari Abu Bakar
+Resource Person ICM658
+
+--- SLIDE 2 ---
+ICM658
+
+--- SLIDE 3 ---
+What is Capstone?
+
+--- SLIDE 4 ---
+Criteria
+Capstone Project consist of the following criteria:
+Practical
+: Software development – web based + mobile apps (with database backend)
+Problem-solving oriented
+: based on solving a real-life problem or addressing a specific need.
+Interdisciplinary
+: Combines knowledge from different subjects or courses.
+Cumulative
+: Draws on everything learned in your course or program.
+
+--- SLIDE 5 ---
+Elements
+
+--- SLIDE 6 ---
+Example
+
+--- SLIDE 7 ---
+Assessment
+
+--- SLIDE 8 ---
+Proposal 
+
+--- SLIDE 9 ---
+Proposal
+
+--- SLIDE 10 ---
+Proposal
+
+--- SLIDE 11 ---
+Proposal
+
+--- SLIDE 12 ---
+Report and Documentation
+
+--- SLIDE 13 ---
+Report and Documentation
+
+--- SLIDE 14 ---
+Report and Documentation
+
+--- SLIDE 15 ---
+Report and Documentation
+Appendices
+Includes: Source code , Interface.
+User manual / installation guide
+Meeting logs or project timelines
+Questionnaires or test scripts
+
+--- SLIDE 16 ---
+Report Structure
+Sample Report Structure Outline
+Cover Page
+Abstract
+Table of Contents
+Introduction
+Problem Statement & Objectives
+Literature Review / Background
+System Analysis and Requirements
+System Design
+Technology Used
+Implementation
+Testing and Evaluation
+Challenges Encountered
+Conclusion and Future Work
+References
+Appendices
+
+--- SLIDE 17 ---
+Project (Prototype)
+MUST consist of the following:
+Web Based application
+Mobile Apps
+Database
+Workable prototype
+Follow proposal
+Report and Documentation based on the project prototype.
+
+--- SLIDE 18 ---
+Suggested Framework
+MySQL/
+PostgresSQL
+Database
+Web
+PHP
+Mobile APPS
+FlutterFlow
+Firebase
+MongoDB/
+Supabase
+Application
+RestAPI
+External Data
+
+--- SLIDE 19 ---
+FAQ
+Do’s
+Use Enterprise solution
+Use Database Management System (DBMS)
+Don’t
+Do not use component unsuitable for enterprise solution.
+Do not use Spreadsheet, 
+GoogleForm
+, MS 
+Acess
+ for database or data input.
+Do not take your senior project and rebrand. 
+E.g
+: Car rental booking system 
+ Doctor booking appointment.
+NO RENTAL/BOOKING SYSTEM
+
+--- SLIDE 20 ---
+Presentation
+Professional Presentation
+Clear formatting, consistent fonts/styles, and labeled figures/tables.
+Free from spelling and grammatical errors.
+Uses formal and objective language.
+
+--- SLIDE 21 ---
+Q&A
+Thank you

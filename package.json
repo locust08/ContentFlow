@@ -1,0 +1,28 @@
+{
+  "name": "content-machine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "app": "node src/server.js",
+    "render": "node src/cli/renderFinal.js",
+    "project": "node src/cli/createProject.js",
+    "analyze": "node src/cli/analyzeReference.js",
+    "generate": "node src/cli/generateContent.js",
+    "pipeline": "node src/cli/runPipeline.js",
+    "seed:demo": "node src/cli/seedDemoUsers.js",
+    "worker": "node src/worker/productionWorker.js",
+    "worker:once": "node src/worker/productionWorker.js --once"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.462",
+    "@remotion/media": "^4.0.462",
+    "pg": "^8.22.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "remotion": "^4.0.462"
+  }
+}
