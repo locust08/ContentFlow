@@ -207,7 +207,7 @@ test("production command center is admin-only and staff job visibility stays pro
 });
 
 test("production command center rejects trailing route segments", async () => {
-  await withCommandCenter(async ({ baseUrl, auth }) => {
+  await withCommandCenter(async ({ baseUrl, auth, requests }) => {
     const retry = await fetch(`${baseUrl}/api/production-jobs/queued-job/retry/extra`, { method: "POST", headers: auth("admin-auth") });
     assert.equal(retry.status, 404);
 
@@ -216,6 +216,14 @@ test("production command center rejects trailing route segments", async () => {
 
     const projectJobs = await fetch(`${baseUrl}/api/projects/staff-project/jobs/extra`, { headers: auth("staff-auth") });
     assert.equal(projectJobs.status, 404);
+
+    const projectJobPost = await fetch(`${baseUrl}/api/projects/staff-project/jobs/extra`, {
+      method: "POST",
+      headers: { ...auth("staff-auth"), "Content-Type": "application/json" },
+      body: JSON.stringify({ jobType: "pipeline" })
+    });
+    assert.equal(projectJobPost.status, 404);
+    assert.equal(requests.filter(({ url, options }) => url.pathname.endsWith("/cf_production_jobs") && options.method === "POST").length, 0);
   });
 });
 
@@ -256,6 +264,12 @@ test("local authenticated manager-client users cannot access command center endp
     assert.equal(client.status, 403);
     const admin = await fetch(`${baseUrl}/api/production-workers`, { headers: { Authorization: "Bearer admin-auth" } });
     assert.equal(admin.status, 200);
+    const projectJobPost = await fetch(`${baseUrl}/api/projects/local-project/jobs/extra`, {
+      method: "POST",
+      headers: { Authorization: "Bearer admin-auth", "Content-Type": "application/json" },
+      body: JSON.stringify({ jobType: "pipeline" })
+    });
+    assert.equal(projectJobPost.status, 404);
   } finally {
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     global.fetch = originalFetch;

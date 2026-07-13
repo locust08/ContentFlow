@@ -727,7 +727,7 @@ async function handleApi(req, res, url) {
         return sendJson(res, 200, { jobs: await listSupabaseProductionJobs({ projectName: project }) });
       }
 
-      if (req.method === "POST" && parts[3] === "jobs") {
+      if (req.method === "POST" && parts.length === 4 && parts[3] === "jobs") {
         await requireHostedEditorAccess(project);
         const body = await readJsonBody(req);
         return sendJson(res, 201, await createQueuedJob(project, body.jobType, body.payload || {}));
@@ -988,7 +988,7 @@ async function handleApi(req, res, url) {
       return sendJson(res, 200, { jobs: await listSupabaseProductionJobs({ projectName: project }) });
     }
 
-    if (req.method === "POST" && parts[3] === "jobs") {
+    if (req.method === "POST" && parts.length === 4 && parts[3] === "jobs") {
       const body = await readJsonBody(req);
       return sendJson(res, 201, await createQueuedJob(project, body.jobType, body.payload || {}));
     }
