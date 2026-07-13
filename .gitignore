@@ -21,3 +21,5 @@ projects/*/renders/*
 
 .vercel
 .env.local
+.worktrees/
+.superpowers/
