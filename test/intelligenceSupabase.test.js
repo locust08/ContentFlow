@@ -124,7 +124,8 @@ test("hosted persistence writes schema-shaped rows and returns domain objects", 
     try {
       const brief = await upsertSupabaseCampaignBrief({
         id: "brief-1", campaignId: "campaign-1", title: "Launch", productName: "Serum",
-        targetAudience: "Busy parents", brief: { offer: "20% off" }
+        targetAudience: "Busy parents", brief: { offer: "Old offer", legacyNote: "Keep this" },
+        offer: "20% off", brandVoice: "Warm"
       });
       const source = await upsertSupabaseResearchSource({
         id: "source-1", briefId: "brief-1", type: "txt", name: "reviews.txt", content: "Easy setup",
@@ -161,6 +162,7 @@ test("hosted persistence writes schema-shaped rows and returns domain objects", 
         ["cf_research_sources", "DELETE"]
       ]);
       assert.equal(requests[2].body.report.pillars.features.length, 0);
+      assert.deepEqual(requests[0].body.brief, { offer: "20% off", legacyNote: "Keep this", brandVoice: "Warm" });
       assert.equal(requests[2].body.status, "approved");
       assert.equal(requests[3].body.selected_hook_id, "hook-1");
       assert.equal(requests[3].body.current_version_number, 0);

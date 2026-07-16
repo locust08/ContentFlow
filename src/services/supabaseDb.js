@@ -305,6 +305,13 @@ export async function upsertSupabaseCampaign(campaign) {
 }
 
 export async function upsertSupabaseCampaignBrief(brief) {
+  const briefDocument = {
+    ...objectValue(brief.brief, {}),
+    ...domainDocument(brief, new Set([
+      "id", "campaignId", "title", "productName", "objective", "targetAudience", "status",
+      "brief", "createdBy", "createdAt", "updatedAt"
+    ]))
+  };
   const row = {
     ...(brief.id ? { id: brief.id } : {}),
     campaign_id: brief.campaignId || null,
@@ -312,10 +319,7 @@ export async function upsertSupabaseCampaignBrief(brief) {
     product_name: brief.productName || brief.product || null,
     objective: brief.objective || null,
     target_audience: brief.targetAudience || brief.audience || null,
-    brief: objectValue(brief.brief, domainDocument(brief, new Set([
-      "id", "campaignId", "title", "productName", "objective", "targetAudience", "status",
-      "createdBy", "createdAt", "updatedAt"
-    ]))),
+    brief: briefDocument,
     status: brief.status || "draft",
     created_by: safeActorId(brief.createdBy),
     created_at: safeDate(brief.createdAt),
