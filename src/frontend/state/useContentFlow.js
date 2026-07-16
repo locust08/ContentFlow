@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, loadAuthConfig, loadProfile, signIn, signOut } from "../api/client.js";
 
 const emptyOrganization = { clients: [], campaigns: [], staff: [] };
 
 export function useContentFlow() {
+  const intelligenceRequest = useRef(0);
   const [state, setState] = useState({
     loading: true,
     error: "",
@@ -19,6 +20,7 @@ export function useContentFlow() {
     supabase: {},
     analytics: null,
     activityItems: [],
+    intelligence: { campaigns: [], active: null },
     auth: { config: null, user: null, required: false }
   });
 
@@ -235,6 +237,134 @@ export function useContentFlow() {
     setStatus("Upload complete");
   }, [loadCore, selectProject, setStatus, state.activeProject]);
 
+  const loadIntelligence = useCallback(async () => {
+    setStatus("Loading market intelligence");
+    const result = await api("/api/intelligence");
+    const payload = result.data || result.intelligence || result;
+    setState((current) => ({
+      ...current,
+      intelligence: { ...current.intelligence, campaigns: payload.campaigns || payload.items || [] },
+      status: "Intelligence ready"
+    }));
+    return payload;
+  }, [setStatus]);
+
+  const loadCampaignIntelligence = useCallback(async (campaignId) => {
+    const requestId = intelligenceRequest.current + 1;
+    intelligenceRequest.current = requestId;
+    setStatus("Loading campaign research");
+    setState((current) => ({
+      ...current,
+      intelligence: { ...current.intelligence, active: null, activeCampaignId: campaignId }
+    }));
+    const result = await api(`/api/campaigns/${encodeURIComponent(campaignId)}/intelligence`);
+    const payload = result.data || result.intelligence || result;
+    setState((current) => ({
+      ...current,
+      ...(requestId === intelligenceRequest.current ? {
+        intelligence: { ...current.intelligence, active: payload, activeCampaignId: campaignId },
+        status: "Campaign intelligence ready"
+      } : {})
+    }));
+    return payload;
+  }, [setStatus]);
+
+  const updateCampaignBrief = useCallback(async (campaignId, brief) => {
+    setStatus("Saving campaign brief");
+    await api(`/api/campaigns/${encodeURIComponent(campaignId)}/brief`, { method: "PUT", body: JSON.stringify(brief) });
+    const payload = await loadCampaignIntelligence(campaignId);
+    setStatus("Campaign brief saved");
+    return payload;
+  }, [loadCampaignIntelligence, setStatus]);
+
+  const addResearchText = useCallback(async (campaignId, source) => {
+    setStatus("Adding research source");
+    await api(`/api/campaigns/${encodeURIComponent(campaignId)}/research-sources/text`, { method: "POST", body: JSON.stringify(source) });
+    const payload = await loadCampaignIntelligence(campaignId);
+    setStatus("Research source added");
+    return payload;
+  }, [loadCampaignIntelligence, setStatus]);
+
+  const uploadResearchSource = useCallback(async (campaignId, file) => {
+    setStatus("Uploading research source");
+    await api(`/api/campaigns/${encodeURIComponent(campaignId)}/research-sources/file`, {
+      method: "POST",
+      body: await file.arrayBuffer(),
+      headers: { "Content-Type": file.type || "application/octet-stream", "x-file-name": file.name }
+    });
+    const payload = await loadCampaignIntelligence(campaignId);
+    setStatus("Research source uploaded");
+    return payload;
+  }, [loadCampaignIntelligence, setStatus]);
+
+  const deleteResearchSource = useCallback(async (campaignId, sourceId) => {
+    setStatus("Removing research source");
+    await api(`/api/campaigns/${encodeURIComponent(campaignId)}/research-sources/${encodeURIComponent(sourceId)}`, { method: "DELETE" });
+    const payload = await loadCampaignIntelligence(campaignId);
+    setStatus("Research source removed");
+    return payload;
+  }, [loadCampaignIntelligence, setStatus]);
+
+  const generateMarketReport = useCallback(async (campaignId, sourceIds) => {
+    setStatus("Generating market report");
+    await api(`/api/campaigns/${encodeURIComponent(campaignId)}/market-reports/generate`, { method: "POST", body: JSON.stringify({ sourceIds }) });
+    const payload = await loadCampaignIntelligence(campaignId);
+    setStatus("Market report generated");
+    return payload;
+  }, [loadCampaignIntelligence, setStatus]);
+
+  const updateMarketReport = useCallback(async (campaignId, reportId, report) => {
+    setStatus("Saving market report");
+    await api(`/api/campaigns/${encodeURIComponent(campaignId)}/market-reports/${encodeURIComponent(reportId)}`, { method: "PUT", body: JSON.stringify(report) });
+    const payload = await loadCampaignIntelligence(campaignId);
+    setStatus("Market report saved");
+    return payload;
+  }, [loadCampaignIntelligence, setStatus]);
+
+  const approveMarketReport = useCallback(async (campaignId, reportId) => {
+    setStatus("Approving market report");
+    await api(`/api/campaigns/${encodeURIComponent(campaignId)}/market-reports/${encodeURIComponent(reportId)}/approve`, { method: "POST" });
+    const payload = await loadCampaignIntelligence(campaignId);
+    setStatus("Market report approved");
+    return payload;
+  }, [loadCampaignIntelligence, setStatus]);
+
+  const analyzeUgcScript = useCallback((mode, manualTranscript) => runProjectAction("/ugc-script/analyze", {
+    body: { mode, ...(manualTranscript ? { manualTranscript } : {}) },
+    status: "Analyzing script inspiration",
+    done: "Script analysis ready"
+  }), [runProjectAction]);
+
+  const generateUgcScript = useCallback((marketReportId, overrideReason = "") => runProjectAction("/ugc-script/generate", {
+    body: { ...(marketReportId ? { marketReportId } : {}), ...(overrideReason ? { overrideReason } : {}) },
+    status: "Generating UGC script",
+    done: "UGC script ready"
+  }), [runProjectAction]);
+
+  const updateUgcScript = useCallback((script) => runProjectAction("/ugc-script", {
+    method: "PUT",
+    body: script,
+    status: "Saving script version",
+    done: "Script version saved"
+  }), [runProjectAction]);
+
+  const reviewUgcScript = useCallback((status, feedback) => runProjectAction("/ugc-script/review", {
+    body: { status, ...(feedback ? { feedback } : {}) },
+    status: "Recording script review",
+    done: status === "approved" ? "Script approved" : "Script changes requested"
+  }), [runProjectAction]);
+
+  const reviewProjectScript = useCallback(async (projectName, status, feedback) => {
+    setStatus("Recording script review");
+    const result = await api(`/api/projects/${encodeURIComponent(projectName)}/ugc-script/review`, {
+      method: "POST",
+      body: JSON.stringify({ status, ...(feedback ? { feedback } : {}) })
+    });
+    await loadCore();
+    setStatus(status === "approved" ? "Script approved" : "Script review updated");
+    return result;
+  }, [loadCore, setStatus]);
+
   const derived = useMemo(() => ({
     role,
     isAdmin,
@@ -242,7 +372,7 @@ export function useContentFlow() {
     isClient,
     aiProjects: state.projects.filter((project) => project.type !== "auto-clipper"),
     clipperProjects: state.projects.filter((project) => project.type === "auto-clipper"),
-    reviewItems: state.projects.filter((project) => ["in-review", "changes-requested", "approved"].includes(project.approvalStatus)),
+    reviewItems: state.projects.filter((project) => ["in-review", "changes-requested", "approved"].includes(project.approvalStatus) || ["internal-review", "client-review", "changes-requested", "approved"].includes(project.scriptStatus)),
     activeProjectSummary: state.projects.find((project) => project.name === state.activeProject)
   }), [isAdmin, isClient, isStaff, role, state.activeProject, state.projects]);
 
@@ -264,6 +394,20 @@ export function useContentFlow() {
     updateProjectMeta,
     runProjectAction,
     uploadProjectFile,
+    loadIntelligence,
+    loadCampaignIntelligence,
+    updateCampaignBrief,
+    addResearchText,
+    uploadResearchSource,
+    deleteResearchSource,
+    generateMarketReport,
+    updateMarketReport,
+    approveMarketReport,
+    analyzeUgcScript,
+    generateUgcScript,
+    updateUgcScript,
+    reviewUgcScript,
+    reviewProjectScript,
     refresh: loadCore,
     login,
     logout

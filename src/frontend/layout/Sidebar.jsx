@@ -10,6 +10,7 @@ import {
   Files,
   FolderKanban,
   Gauge,
+  Lightbulb,
   LogOut,
   Megaphone,
   Plus,
@@ -21,6 +22,7 @@ import {
 
 const creatorItems = [
   { to: "/studio", label: "Studio", icon: Sparkles },
+  { to: "/intelligence", label: "Market Intelligence", icon: Lightbulb },
   { to: "/projects", label: "Projects", icon: FolderKanban },
   { to: "/media", label: "Media", icon: Clapperboard },
   { to: "/approvals", label: "Approvals", icon: Files },

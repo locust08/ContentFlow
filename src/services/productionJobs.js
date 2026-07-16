@@ -12,6 +12,9 @@ export const PRODUCTION_JOB_TYPES = new Set([
   "clipper-render",
   "clipper-render-bulk",
   "clipper-render-variations",
+  "generate-market-report",
+  "analyze-ugc-script",
+  "generate-ugc-script",
   "pipeline"
 ]);
 
@@ -29,7 +32,10 @@ const actionToJobType = {
   "clipper/analyze": "clipper-analyze",
   "clipper/render": "clipper-render",
   "clipper/render-bulk": "clipper-render-bulk",
-  "clipper/render-variations": "clipper-render-variations"
+  "clipper/render-variations": "clipper-render-variations",
+  "market-reports/generate": "generate-market-report",
+  "ugc-script/analyze": "analyze-ugc-script",
+  "ugc-script/generate": "generate-ugc-script"
 };
 
 export function jobTypeForAction(action) {

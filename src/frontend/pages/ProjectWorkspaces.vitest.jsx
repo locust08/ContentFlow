@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { AutoClipperPage } from "./ProjectWorkspaces.jsx";
+import { AiGeneratorPage, AutoClipperPage } from "./ProjectWorkspaces.jsx";
 
 function buildApp() {
   return {
@@ -63,5 +63,27 @@ describe("AutoClipperPage", () => {
     expect(app.runProjectAction).toHaveBeenCalledWith("/clipper/render-variations", expect.objectContaining({
       body: { reactionIds: ["r-1", "r-2"] }
     }));
+  });
+});
+
+describe("AiGeneratorPage", () => {
+  it("includes research, script, and review in production progress", () => {
+    render(<AiGeneratorPage app={{
+      activeProject: "ugc-test",
+      activeProjectData: {
+        summary: { type: "ai-generator", renderCount: 0 },
+        files: {}, products: [], characters: [], videos: [], renders: []
+      },
+      uploadProjectFile: vi.fn(),
+      runProjectAction: vi.fn(),
+      analyzeUgcScript: vi.fn(),
+      generateUgcScript: vi.fn(),
+      updateUgcScript: vi.fn(),
+      reviewUgcScript: vi.fn()
+    }} />);
+    const progress = screen.getByRole("list");
+    expect(progress).toHaveTextContent("Research");
+    expect(progress).toHaveTextContent("Script");
+    expect(progress).toHaveTextContent("Review");
   });
 });

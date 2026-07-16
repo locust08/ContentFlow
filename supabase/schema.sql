@@ -112,8 +112,121 @@ create table if not exists cf_production_jobs (
   updated_at timestamptz not null default now()
 );
 
+do $$
+declare
+  legacy_uuid boolean;
+  legacy_rows bigint;
+begin
+  select exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'cf_campaign_briefs'
+      and column_name = 'id' and data_type = 'uuid'
+  ) into legacy_uuid;
+  if legacy_uuid then
+    select
+      (select count(*) from cf_campaign_briefs)
+      + (select count(*) from cf_research_sources)
+      + (select count(*) from cf_market_reports)
+      + (select count(*) from cf_ugc_scripts)
+      + (select count(*) from cf_ugc_script_versions)
+      + (select count(*) from cf_script_review_events)
+    into legacy_rows;
+    if legacy_rows = 0 then
+      drop table if exists cf_script_review_events cascade;
+      drop table if exists cf_ugc_script_versions cascade;
+      drop table if exists cf_ugc_scripts cascade;
+      drop table if exists cf_market_reports cascade;
+      drop table if exists cf_research_sources cascade;
+      drop table if exists cf_campaign_briefs cascade;
+    else
+      raise exception 'Legacy UUID intelligence tables contain data; migrate them before applying the text-id schema.';
+    end if;
+  end if;
+end $$;
+
+create table if not exists cf_campaign_briefs (
+  id text primary key default gen_random_uuid()::text,
+  campaign_id text not null references cf_campaigns(id) on delete restrict,
+  title text not null,
+  product_name text,
+  objective text,
+  target_audience text,
+  brief jsonb not null default '{}'::jsonb,
+  status text not null default 'draft' check (status in ('draft', 'researching', 'complete', 'archived')),
+  created_by text references cf_users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists cf_research_sources (
+  id text primary key default gen_random_uuid()::text,
+  brief_id text not null references cf_campaign_briefs(id) on delete cascade,
+  source_type text not null check (source_type in ('text', 'txt', 'md', 'csv')),
+  name text not null,
+  content text not null,
+  passages jsonb not null default '[]'::jsonb,
+  metadata jsonb not null default '{}'::jsonb,
+  local_path text,
+  created_by text references cf_users(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists cf_market_reports (
+  id text primary key default gen_random_uuid()::text,
+  brief_id text not null references cf_campaign_briefs(id) on delete restrict,
+  campaign_id text not null references cf_campaigns(id) on delete restrict,
+  status text not null default 'draft' check (status in ('draft', 'ready', 'approved', 'archived')),
+  source text not null default 'fallback',
+  report jsonb not null default '{}'::jsonb,
+  scriptwriter_input jsonb not null default '{}'::jsonb,
+  created_by text references cf_users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists cf_ugc_scripts (
+  id text primary key default gen_random_uuid()::text,
+  market_report_id text references cf_market_reports(id) on delete restrict,
+  campaign_id text references cf_campaigns(id) on delete restrict,
+  project_name text not null references cf_projects(name) on delete cascade,
+  title text not null,
+  status text not null default 'draft' check (status in ('draft', 'internal-review', 'client-review', 'approved', 'changes-requested')),
+  selected_hook_id text,
+  selected_hook_index integer,
+  current_version_number integer not null default 0 check (current_version_number >= 0),
+  created_by text references cf_users(id) on delete set null,
+  updated_by text references cf_users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists cf_ugc_script_versions (
+  id text primary key default gen_random_uuid()::text,
+  script_id text not null references cf_ugc_scripts(id) on delete cascade,
+  version_number integer not null check (version_number > 0),
+  content jsonb not null default '{}'::jsonb,
+  change_note text,
+  created_by text references cf_users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  unique (script_id, version_number)
+);
+
+create table if not exists cf_script_review_events (
+  id text primary key default gen_random_uuid()::text,
+  script_id text not null references cf_ugc_scripts(id) on delete restrict,
+  version_id text not null references cf_ugc_script_versions(id) on delete restrict,
+  from_status text,
+  to_status text not null,
+  feedback text,
+  actor_id text references cf_users(id) on delete set null,
+  override_reason text,
+  created_at timestamptz not null default now()
+);
+
 alter table cf_users add column if not exists auth_user_id uuid;
 alter table cf_users add column if not exists client_id text;
+alter table cf_ugc_scripts alter column market_report_id drop not null;
+alter table cf_ugc_scripts alter column campaign_id drop not null;
 alter table cf_render_jobs add column if not exists output_url text;
 
 create index if not exists idx_cf_users_auth_user on cf_users(auth_user_id);
@@ -127,3 +240,12 @@ create index if not exists idx_cf_analytics_events_created_at on cf_analytics_ev
 create index if not exists idx_cf_analytics_events_project_name on cf_analytics_events(project_name);
 create index if not exists idx_cf_production_jobs_status on cf_production_jobs(status, created_at);
 create index if not exists idx_cf_production_jobs_project on cf_production_jobs(project_name);
+create index if not exists idx_campaign_briefs_campaign on cf_campaign_briefs(campaign_id, created_at desc);
+create unique index if not exists uq_campaign_briefs_campaign on cf_campaign_briefs(campaign_id);
+create index if not exists idx_research_sources_brief on cf_research_sources(brief_id, created_at);
+create index if not exists idx_market_reports_brief on cf_market_reports(brief_id, created_at desc);
+create index if not exists idx_market_reports_campaign on cf_market_reports(campaign_id, created_at desc);
+create index if not exists idx_ugc_scripts_campaign_status on cf_ugc_scripts(campaign_id, status);
+create index if not exists idx_ugc_scripts_project on cf_ugc_scripts(project_name);
+create index if not exists idx_ugc_script_versions_script on cf_ugc_script_versions(script_id, version_number desc);
+create index if not exists idx_script_review_events_script on cf_script_review_events(script_id, created_at desc);

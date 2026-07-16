@@ -8,13 +8,26 @@ import { generateLibTvUgcVideo, generateLibTvVideos } from "../services/libtvCli
 import { transcribeAudio } from "../services/openaiClient.js";
 import { generateImagePrompts, generateVideoPrompts } from "../services/promptGenerator.js";
 import { analyzeReference } from "../services/referenceAnalyzer.js";
+import { generateMarketReport } from "../services/marketIntelligence.js";
+import {
+  analyzeUgcInspiration,
+  assertVideoGenerationEligible,
+  createScriptVersion,
+  generateUgcScript,
+  selectHook
+} from "../services/ugcScriptStudio.js";
 import { renderClipperVideo, renderFinalVideo } from "../services/remotionRenderer.js";
 import {
   claimNextSupabaseProductionJob,
   updateSupabaseProductionJob,
   uploadSupabaseStorageFile,
+  supabaseCampaignIntelligence,
+  supabaseProjectScriptBundle,
   upsertSupabaseClipCandidates,
-  upsertSupabaseRenderJob
+  upsertSupabaseMarketReport,
+  upsertSupabaseRenderJob,
+  upsertSupabaseUgcScript,
+  upsertSupabaseUgcScriptVersion
 } from "../services/supabaseDb.js";
 import { transcribeGeneratedVideo } from "../services/subtitlePlanner.js";
 import { extractAudio, extractFrames } from "../services/video.js";
@@ -25,6 +38,17 @@ loadEnv();
 
 const port = Number(process.env.PORT || 4173);
 const pollMs = Number(process.env.WORKER_POLL_MS || 5000);
+
+function transcriptText(value) {
+  if (typeof value === "string") return value.trim();
+  return String(value?.text || value?.transcript || value?.segments?.map((segment) => segment.text).join(" ") || "").trim();
+}
+
+function localTranscript(projectDir, manual = "") {
+  if (manual) return String(manual).trim();
+  const transcriptPath = path.join(projectDir, "analysis", "transcript.json");
+  return fileExists(transcriptPath) ? transcriptText(readJson(transcriptPath)) : "";
+}
 
 async function analyzeProjectReference(project, frames = 12) {
   const projectDir = projectPath(project);
@@ -77,7 +101,7 @@ async function recordRenders(project, result) {
   return outputUrl;
 }
 
-async function processJob(job) {
+export async function processJob(job) {
   const project = job.projectName;
   const payload = job.payload || {};
   const projectDir = projectPath(project);
@@ -94,11 +118,87 @@ async function processJob(job) {
       const videoPrompts = readJson(path.join(projectDir, "generated", "video-prompts.json"));
       return generateLibTvVideos({ projectDir, videoPrompts, limit: payload.limit ?? 1, maxSeconds: payload.maxSeconds ?? 180 });
     }
+    case "generate-market-report": {
+      if (!payload.campaignId) throw new Error("Market report job is missing campaignId.");
+      const intelligence = await supabaseCampaignIntelligence(payload.campaignId);
+      if (!intelligence.campaignBrief?.id) throw new Error("Save the campaign brief before market analysis.");
+      const selected = payload.sourceIds?.length
+        ? intelligence.researchSources.filter((source) => payload.sourceIds.includes(source.id))
+        : intelligence.researchSources;
+      const generated = await generateMarketReport({ brief: intelligence.campaignBrief.brief || intelligence.campaignBrief, sources: selected });
+      const report = await upsertSupabaseMarketReport({
+        ...generated,
+        id: `report-${payload.campaignId}-${Date.now()}`,
+        briefId: intelligence.campaignBrief.id,
+        campaignId: payload.campaignId,
+        status: "ready",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+      writeJson(path.join(projectDir, "analysis", "market-report.json"), report);
+      return report;
+    }
+    case "analyze-ugc-script": {
+      const transcript = localTranscript(projectDir, payload.manualTranscript);
+      if (!transcript) throw new Error("Analyze the reference video or provide a manual transcript first.");
+      const analysis = await analyzeUgcInspiration({ transcript });
+      writeJson(path.join(projectDir, "analysis", "ugc-script-analysis.json"), analysis);
+      return analysis;
+    }
+    case "generate-ugc-script": {
+      const summaries = await supabaseProjectScriptBundle(project);
+      const campaignId = payload.campaignId || summaries.ugcScript?.campaignId || payload.projectCampaignId;
+      if (!campaignId) throw new Error("Script generation job is missing campaignId.");
+      const intelligence = await supabaseCampaignIntelligence(campaignId);
+      const report = intelligence.marketReport;
+      if (!report) throw new Error("Generate a market report before the UGC script.");
+      const transcript = localTranscript(projectDir, payload.manualTranscript);
+      const generated = await generateUgcScript({
+        title: `${project} UGC Script`,
+        transcript,
+        scriptwriterInput: report.scriptwriterInput,
+        marketReportId: report.id,
+        reportStatus: report.status,
+        isAdmin: Boolean(payload.overrideReason),
+        overrideReason: payload.overrideReason
+      });
+      const now = new Date().toISOString();
+      let script = selectHook({
+        ...generated,
+        id: summaries.ugcScript?.id || `script-${project}`,
+        projectName: project,
+        campaignId,
+        currentVersionNumber: summaries.ugcScript?.currentVersionNumber || 0,
+        createdAt: summaries.ugcScript?.createdAt || now,
+        updatedAt: now
+      }, generated.hooks[0].id);
+      const analysisPath = path.join(projectDir, "analysis", "ugc-script-analysis.json");
+      const content = { ...script, scriptAnalysis: fileExists(analysisPath) ? readJson(analysisPath) : null };
+      const created = createScriptVersion({ script, versions: summaries.scriptVersions, content, changeNote: "Generated by local production worker", createdBy: job.requestedBy || "worker", now });
+      const savedScript = await upsertSupabaseUgcScript(created.script);
+      const savedVersion = await upsertSupabaseUgcScriptVersion(created.version);
+      script = { ...created.script, currentVersionId: savedVersion.id };
+      writeJson(path.join(projectDir, "generated", "ugc-script.json"), script);
+      writeJson(path.join(projectDir, "generated", "ugc-script-versions.json"), { versions: [...summaries.scriptVersions, savedVersion] });
+      return { script: savedScript, version: savedVersion };
+    }
     case "generate-ugc-video": {
+      const scriptBundle = await supabaseProjectScriptBundle(project);
+      const script = scriptBundle.ugcScript || (fileExists(path.join(projectDir, "generated", "ugc-script.json")) ? readJson(path.join(projectDir, "generated", "ugc-script.json")) : null);
+      if (!script) throw new Error("Approved UGC script is missing.");
+      const versionId = script.currentVersionId || script.versionId;
+      if (payload.scriptVersionId && versionId && payload.scriptVersionId !== versionId) throw new Error("Queued script version is no longer active. Queue production again.");
+      assertVideoGenerationEligible(script, {
+        isAdmin: Boolean(payload.override?.overrideReason || payload.override?.reason),
+        overrideReason: payload.override?.overrideReason || payload.override?.reason || "",
+        versionId,
+        actorId: job.requestedBy || "worker"
+      });
+      const intelligence = script.campaignId ? await supabaseCampaignIntelligence(script.campaignId) : null;
       const blueprint = fileExists(path.join(projectDir, "analysis", "reference-blueprint.json"))
         ? readJson(path.join(projectDir, "analysis", "reference-blueprint.json"))
         : readJson(path.join(projectDir, "analysis", "style-analysis.json"));
-      return generateLibTvUgcVideo({ projectDir, blueprint, maxSeconds: payload.maxSeconds || 300 });
+      return generateLibTvUgcVideo({ projectDir, blueprint, script, campaignBrief: intelligence?.campaignBrief?.brief || intelligence?.campaignBrief || null, maxSeconds: payload.maxSeconds || 300 });
     }
     case "transcribe-generated-video":
       return transcribeGeneratedVideo({ projectDir });

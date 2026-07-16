@@ -16,6 +16,7 @@ describe("StudioPage", () => {
   it("presents the two production tools as the primary actions", () => {
     render(<MemoryRouter><StudioPage app={app} /></MemoryRouter>);
     expect(screen.getByRole("heading", { name: /ai ugc generator/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /market intelligence/i })).toHaveAttribute("href", "/intelligence");
     expect(screen.getByRole("heading", { name: /auto clipper/i })).toBeInTheDocument();
     expect(screen.getByText(/recent projects/i)).toBeInTheDocument();
   });

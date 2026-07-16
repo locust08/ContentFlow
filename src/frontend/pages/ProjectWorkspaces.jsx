@@ -7,6 +7,7 @@ import { Button } from "../components/Button.jsx";
 import { Card } from "../components/Card.jsx";
 import { EmptyState } from "../components/EmptyState.jsx";
 import { VideoCard } from "../components/VideoCard.jsx";
+import { UgcScriptStudio } from "../components/UgcScriptStudio.jsx";
 
 function FileAction({ label, accept, multiple = false, onFile }) {
   const [files, setFiles] = useState([]);
@@ -70,6 +71,7 @@ export function AiGeneratorPage({ app }) {
   const data = app.activeProjectData;
   const summary = data?.summary;
   const media = mediaItems(data);
+  const [productionOverride, setProductionOverride] = useState("");
 
   if (!data) return <EmptyState title="Select an AI Generator project">Choose an AI project from Projects or Creator Studio.</EmptyState>;
 
@@ -77,7 +79,10 @@ export function AiGeneratorPage({ app }) {
     { label: "Reference", ready: summary.hasReference, detail: "Winning example" },
     { label: "Product", ready: summary.hasProduct, detail: "Promoted item" },
     { label: "Character", ready: summary.hasCharacter, detail: "Creator identity" },
+    { label: "Research", ready: data.files?.marketReport?.status === "approved", detail: "Market report" },
     { label: "Blueprint", ready: summary.hasReferenceBlueprint || summary.hasStyleAnalysis, detail: `${summary.frameCount || 0} frames read` },
+    { label: "Script", ready: Boolean(data.files?.ugcScript), detail: `${data.scriptVersions?.length || 0} versions` },
+    { label: "Review", ready: data.files?.ugcScript?.status === "approved" || data.scriptReviewEvents?.some((event) => (event.toStatus || event.status) === "approved"), detail: "Script decision" },
     { label: "Generate", ready: summary.hasUgcVideo, detail: "UGC output" },
     { label: "Finish", ready: summary.renderCount > 0, detail: `${summary.renderCount || 0} renders` }
   ];
@@ -109,13 +114,16 @@ export function AiGeneratorPage({ app }) {
         </Card>
       </section>
 
+      <UgcScriptStudio app={app} data={data} />
+
       {(media.videos.length > 1 || media.renders.length > 1) && <Card eyebrow="Output library" title="Generated media"><div className="media-grid">{[...media.videos, ...media.renders].map((item) => <VideoCard key={item.url} item={item} />)}</div></Card>}
 
       <footer className="production-action-bar">
         <div><WandSparkles size={19} /><span><strong>Production actions</strong><small>{app.status}</small></span></div>
         <div className="production-action-bar__buttons">
           <Button variant="secondary" disabled={!summary.hasReference} onClick={() => app.runProjectAction("/analyze-reference", { body: { frames: 12 }, status: "Analyzing reference", done: "Analysis ready" })}>Analyze</Button>
-          <Button variant="secondary" disabled={!summary.hasReference || !summary.hasProduct || !summary.hasCharacter} onClick={() => app.runProjectAction("/generate-ugc-video", { body: { maxSeconds: 300 }, status: "Generating UGC video", done: "UGC video ready" })}>Generate</Button>
+          {app.isAdmin && data.files?.ugcScript && data.files.ugcScript.status !== "approved" && <label className="production-override">Admin override<input aria-label="Production override reason" value={productionOverride} onChange={(event) => setProductionOverride(event.target.value)} placeholder="Reason required" /></label>}
+          <Button variant="secondary" disabled={!summary.hasReference || !summary.hasProduct || !summary.hasCharacter || !data.files?.ugcScript || (data.files.ugcScript.status !== "approved" && !(app.isAdmin && productionOverride.trim()))} onClick={() => app.runProjectAction("/generate-ugc-video", { body: { maxSeconds: 300, scriptId: data.files.ugcScript.id, scriptVersionId: data.files.ugcScript.currentVersionId, selectedHookId: data.files.ugcScript.selectedHookId, ...(productionOverride.trim() ? { overrideReason: productionOverride.trim() } : {}) }, status: "Generating UGC video", done: "UGC video ready" })}>Generate</Button>
           <Button variant="secondary" disabled={!summary.hasUgcVideo} onClick={() => app.runProjectAction("/transcribe-generated-video", { status: "Transcribing output", done: "Transcript ready" })}>Transcribe</Button>
           <Button disabled={!summary.hasUgcVideo} onClick={() => app.runProjectAction("/render", { status: "Rendering final MP4", done: "Final render ready" })}><Play size={16} /> Render final</Button>
         </div>

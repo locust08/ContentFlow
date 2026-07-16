@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowRight, Clapperboard, FolderKanban, Sparkles, UserRound, Workflow } from "lucide-react";
+import { ArrowRight, Clapperboard, FolderKanban, Lightbulb, Sparkles, UserRound, Workflow } from "lucide-react";
 import { getProjectPath } from "../routing/routes.js";
 import { VideoCard } from "../components/VideoCard.jsx";
 
@@ -36,6 +36,7 @@ export function StudioPage({ app }) {
       </section>
 
       <section className="quick-tool-grid" aria-label="Workspace shortcuts">
+        <Link to="/intelligence" className="quick-tool"><span className="quick-tool__icon"><Lightbulb size={20} /></span><span><strong>Market Intelligence</strong><small>Research and approve campaign strategy</small></span><ArrowRight size={16} /></Link>
         <Link to="/projects" className="quick-tool"><span className="quick-tool__icon"><FolderKanban size={20} /></span><span><strong>Projects</strong><small>Manage all production workspaces</small></span><ArrowRight size={16} /></Link>
         <Link to="/media" className="quick-tool"><span className="quick-tool__icon quick-tool__icon--violet"><UserRound size={20} /></span><span><strong>Characters & media</strong><small>Review reusable assets and outputs</small></span><ArrowRight size={16} /></Link>
         <Link to={app.isAdmin ? "/manage/jobs" : "/projects"} className="quick-tool"><span className="quick-tool__icon quick-tool__icon--blue"><Workflow size={20} /></span><span><strong>Production queue</strong><small>Track local and hosted jobs</small></span><ArrowRight size={16} /></Link>

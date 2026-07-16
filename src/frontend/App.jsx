@@ -17,6 +17,7 @@ import {
   TeamPage
 } from "./pages/ManagementPages.jsx";
 import { AiGeneratorPage, AutoClipperPage } from "./pages/ProjectWorkspaces.jsx";
+import { CampaignIntelligencePage, IntelligencePage } from "./pages/MarketIntelligencePage.jsx";
 import { CreateProjectModal } from "./components/CreateProjectModal.jsx";
 import { canAccessPath, getLandingPath, getProjectPath } from "./routing/routes.js";
 
@@ -61,6 +62,8 @@ function AppRoutes({ app }) {
       <Route path="/" element={<Navigate to={getLandingPath(app.role)} replace />} />
       <Route path="/dashboard" element={protectedPage(<DashboardPage app={app} />)} />
       <Route path="/studio" element={protectedPage(<StudioPage app={app} />)} />
+      <Route path="/intelligence" element={protectedPage(<IntelligencePage app={app} />)} />
+      <Route path="/campaigns/:campaign/intelligence" element={protectedPage(<CampaignIntelligencePage app={app} />)} />
       <Route path="/projects" element={protectedPage(<ProjectsPage app={app} />)} />
       <Route path="/projects/:project/ai-generator" element={protectedPage(<ProjectWorkspaceRoute app={app} type="ai-generator" />)} />
       <Route path="/projects/:project/auto-clipper" element={protectedPage(<ProjectWorkspaceRoute app={app} type="auto-clipper" />)} />

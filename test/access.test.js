@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { filterMediaForUser, filterProjectsForUser } from "../src/services/access.js";
+import { canAccessCampaign, canEditCampaign, filterMediaForUser, filterProjectsForUser } from "../src/services/access.js";
 
 const projects = [
   { name: "admin-project", clientId: "digital-bee", assignedStaffId: "admin", reviewerId: "reviewer" },
@@ -30,4 +30,19 @@ test("client users can see their client projects and reviewer assignments", () =
   const user = { id: "reviewer", role: "manager-client", clientId: "senheng" };
   assert.deepEqual(filterProjectsForUser(projects, user).map((project) => project.name), ["admin-project", "staff-project"]);
   assert.deepEqual(filterMediaForUser(media, user).map((item) => item.name), ["a.mp4", "b.mp4"]);
+});
+
+test("campaign access follows admin, assignment, and client boundaries", () => {
+  const campaign = { id: "launch", clientId: "senheng" };
+  const campaignProjects = [
+    { name: "launch-a", campaignId: "launch", assignedStaffId: "editor", reviewerId: "reviewer", clientId: "senheng" }
+  ];
+
+  assert.equal(canAccessCampaign(campaign, campaignProjects, { id: "admin", role: "admin" }), true);
+  assert.equal(canEditCampaign(campaign, campaignProjects, { id: "admin", role: "admin" }), true);
+  assert.equal(canAccessCampaign(campaign, campaignProjects, { id: "editor", role: "staff-editor" }), true);
+  assert.equal(canEditCampaign(campaign, campaignProjects, { id: "editor", role: "staff-editor" }), true);
+  assert.equal(canAccessCampaign(campaign, campaignProjects, { id: "other", role: "staff-editor" }), false);
+  assert.equal(canAccessCampaign(campaign, campaignProjects, { id: "client", role: "manager-client", clientId: "senheng" }), true);
+  assert.equal(canEditCampaign(campaign, campaignProjects, { id: "client", role: "manager-client", clientId: "senheng" }), false);
 });

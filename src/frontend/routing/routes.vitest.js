@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canAccessPath, getLandingPath, getProjectPath } from "./routes.js";
+import { canAccessPath, getCampaignIntelligencePath, getLandingPath, getProjectPath } from "./routes.js";
 
 describe("role-aware routing", () => {
   it("sends each role to its dedicated landing page", () => {
@@ -17,12 +17,24 @@ describe("role-aware routing", () => {
 
   it("keeps staff users out of admin management routes", () => {
     expect(canAccessPath("staff-editor", "/studio")).toBe(true);
+    expect(canAccessPath("staff-editor", "/intelligence")).toBe(true);
+    expect(canAccessPath("staff-editor", "/campaigns/summer/intelligence")).toBe(true);
     expect(canAccessPath("staff-editor", "/projects/demo/auto-clipper")).toBe(true);
     expect(canAccessPath("staff-editor", "/manage/team")).toBe(false);
+  });
+
+  it("blocks clients from market intelligence", () => {
+    expect(canAccessPath("admin", "/intelligence")).toBe(true);
+    expect(canAccessPath("manager-client", "/intelligence")).toBe(false);
+    expect(canAccessPath("manager-client", "/campaigns/summer/intelligence")).toBe(false);
   });
 
   it("builds stable encoded project workspace URLs", () => {
     expect(getProjectPath({ name: "Summer UGC", type: "ai-generator" })).toBe("/projects/Summer%20UGC/ai-generator");
     expect(getProjectPath({ name: "Clip Test", type: "auto-clipper" })).toBe("/projects/Clip%20Test/auto-clipper");
+  });
+
+  it("builds encoded campaign intelligence URLs", () => {
+    expect(getCampaignIntelligencePath("Malaysia Launch 50%")).toBe("/campaigns/Malaysia%20Launch%2050%25/intelligence");
   });
 });

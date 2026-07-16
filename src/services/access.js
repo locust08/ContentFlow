@@ -25,3 +25,19 @@ export function canAccessMedia(item, user = null) {
 export function filterMediaForUser(items = [], user = null) {
   return items.filter((item) => canAccessMedia(item, user));
 }
+
+export function canAccessCampaign(campaign, projects = [], user = null) {
+  if (!campaign) return false;
+  if (!user) return true;
+  const role = normalizeRole(user.role);
+  if (role === "admin") return true;
+  if (role === "manager-client") return Boolean(user.clientId) && campaign.clientId === user.clientId;
+  return projects.some((project) => project.campaignId === campaign.id && project.assignedStaffId === user.id);
+}
+
+export function canEditCampaign(campaign, projects = [], user = null) {
+  if (!user) return true;
+  const role = normalizeRole(user.role);
+  if (role === "manager-client") return false;
+  return canAccessCampaign(campaign, projects, user);
+}

@@ -252,11 +252,30 @@ async function downloadAndRankUgcCandidates(videoUrls, videosDir, referenceUrl) 
   };
 }
 
-function buildUgcReplicationMessage({ referenceUrl, productUrl, characterUrl, blueprint }) {
+export function buildUgcReplicationMessage({
+  referenceUrl,
+  productUrl,
+  characterUrl,
+  blueprint,
+  script = null,
+  campaignBrief = null
+}) {
   const scriptStyle = blueprint?.scriptStyle ? JSON.stringify(blueprint.scriptStyle, null, 2) : "";
   const visualStyle = blueprint?.visualStyle ? JSON.stringify(blueprint.visualStyle, null, 2) : "";
   const editingStyle = blueprint?.editingStyle ? JSON.stringify(blueprint.editingStyle, null, 2) : "";
   const sceneRhythm = blueprint?.sceneRhythm ? JSON.stringify(blueprint.sceneRhythm, null, 2) : "";
+  const hooks = Array.isArray(script?.hooks) ? script.hooks : [];
+  const selectedHook = hooks.find((hook) => hook.id === script?.selectedHookId) || hooks[0] || null;
+  const scenes = Array.isArray(script?.scenes) ? script.scenes : [];
+  const sceneInstructions = scenes.length
+    ? scenes.map((scene, index) => [
+      `${index + 1}. ${scene.visualAction || scene.visual || "Follow the reference visual beat."}`,
+      `   Spoken word: ${scene.audioSpokenWord || scene.voiceover || scene.audio || ""}`,
+      `   Timing: ${Number(scene.startSeconds ?? 0)}-${Number(scene.endSeconds ?? scene.durationSeconds ?? 0)} seconds`
+    ].join("\n"))
+    : ["1. Derive the scene order from the reference blueprint and preserve its hook, proof, and CTA rhythm."];
+  const approvedClaims = Array.isArray(campaignBrief?.approvedClaims) ? campaignBrief.approvedClaims : [];
+  const restrictedClaims = Array.isArray(campaignBrief?.restrictedClaims) ? campaignBrief.restrictedClaims : [];
 
   return [
     "IMPORTANT OUTPUT FORMAT / 重要格式要求:",
@@ -290,13 +309,18 @@ function buildUgcReplicationMessage({ referenceUrl, productUrl, characterUrl, bl
     "The presenter must follow the attached character reference: same general face identity, age range, gender presentation, hairstyle/hijab/clothing cues if visible.",
     "视频里的产品必须参考并接近上传的产品图。产品需要一直在手上展示，并靠近镜头。",
     "",
-    "Mandatory shot structure / 必须复制的结构:",
-    "1. Vertical close-up selfie/UGC framing, presenter centered, plain home background.",
-    "2. Presenter holds the product case in one hand and a smartphone in the other hand, both close to camera.",
-    "3. Open or reveal the product case clearly.",
-    "4. Show a phone pairing / connection / proof UI moment as the climax.",
-    "5. End with a smiling reaction while both phone and product remain visible.",
-    "6. Use one continuous take or very minimal cuts with a subtle push-in near the proof moment.",
+    "Approved script scene structure:",
+    selectedHook ? `Selected opening hook: ${selectedHook.text || selectedHook.hook || ""}` : "No approved script is available; derive the scene order from the reference blueprint.",
+    ...sceneInstructions,
+    "Follow these actions and spoken lines as the production source of truth while matching the reference motion and pacing.",
+    "Do not render the spoken words as on-screen text.",
+    "",
+    "Campaign guardrails:",
+    `Brand: ${campaignBrief?.brand || campaignBrief?.brandName || "Use the attached product branding only"}`,
+    `Product: ${campaignBrief?.product || campaignBrief?.productName || "Use the attached product"}`,
+    `Approved claims: ${approvedClaims.length ? approvedClaims.join("; ") : "Only make claims explicitly present in the approved script"}`,
+    `Restricted claims: ${restrictedClaims.length ? restrictedClaims.join("; ") : "Do not invent medical, performance, pricing, or guarantee claims"}`,
+    "Never say, imply, or visually present a restricted claim.",
     "",
     "Match from the reference:",
     "- Hook structure and emotional delivery",
@@ -429,7 +453,13 @@ export async function generateLibTvVideos({ projectDir, videoPrompts, limit = 1,
   return manifest;
 }
 
-export async function generateLibTvUgcVideo({ projectDir, blueprint, maxSeconds = 300 }) {
+export async function generateLibTvUgcVideo({
+  projectDir,
+  blueprint,
+  script = null,
+  campaignBrief = null,
+  maxSeconds = 300
+}) {
   const referencePath = path.join(projectDir, "reference", "reference.mp4");
   const productDir = path.join(projectDir, "product");
   const characterDir = path.join(projectDir, "character");
@@ -451,7 +481,14 @@ export async function generateLibTvUgcVideo({ projectDir, blueprint, maxSeconds 
   const referenceUrl = await uploadLibTvFile(referencePath);
   const productUrl = await uploadLibTvFile(productPath);
   const characterUrl = await uploadLibTvFile(characterPath);
-  const message = buildUgcReplicationMessage({ referenceUrl, productUrl, characterUrl, blueprint });
+  const message = buildUgcReplicationMessage({
+    referenceUrl,
+    productUrl,
+    characterUrl,
+    blueprint,
+    script,
+    campaignBrief
+  });
   const session = await createLibTvSession(message);
   const result = await waitForResults(session.sessionId, { maxSeconds, requireFinalLike: true });
   const { candidates, primary } = await downloadAndRankUgcCandidates(result.videoUrls, videosDir, referenceUrl);

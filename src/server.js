@@ -5,7 +5,7 @@ import { fileURLToPath, URL } from "node:url";
 import { loadEnv, projectPath, projectsDir, rootDir } from "./config.js";
 import { createFolder, createProject, deleteFolder, deleteProject, getProjectMeta, readFolders, renameFolder, updateProjectMeta } from "./services/project.js";
 import { createCampaign, createClient, readOrganization } from "./services/organization.js";
-import { canAccessProject, filterMediaForUser, filterProjectsForUser } from "./services/access.js";
+import { canAccessCampaign, canAccessProject, canEditCampaign, filterMediaForUser, filterProjectsForUser } from "./services/access.js";
 import { authConfig, authRequired, getRequestUser, hostedDemoMode, publicUser } from "./services/auth.js";
 import { extractAudio, extractFrames } from "./services/video.js";
 import { analyzeReference } from "./services/referenceAnalyzer.js";
@@ -20,8 +20,20 @@ import { generateElevenLabsVoiceover, listAudio } from "./services/elevenLabsCli
 import { transcribeGeneratedVideo } from "./services/subtitlePlanner.js";
 import { analyzeClipperSource, downloadClipperSource, selectClipperHighlight } from "./services/clipperService.js";
 import { buildProductionJob } from "./services/productionJobs.js";
+import { generateMarketReport, prepareResearchSource } from "./services/marketIntelligence.js";
+import { createLocalIntelligenceStore } from "./services/localIntelligenceStore.js";
+import {
+  analyzeUgcInspiration,
+  assertVideoGenerationEligible,
+  createScriptVersion,
+  generateUgcScript,
+  importLegacyScriptPlan,
+  selectHook,
+  transitionScriptStatus
+} from "./services/ugcScriptStudio.js";
 import {
   createSupabaseProductionJob,
+  deleteSupabaseResearchSource,
   deleteSupabaseProject,
   initializeSupabaseSchema,
   listSupabaseMediaItems,
@@ -31,16 +43,24 @@ import {
   listSupabaseProductionJobs,
   recordSupabaseApprovalEvent,
   recordSupabaseActivityEvent,
+  recordSupabaseScriptReviewEvent,
   supabaseAnalytics,
+  supabaseCampaignIntelligence,
+  supabaseProjectScriptBundle,
   supabaseProjectData,
   supabaseStatus,
   syncLocalSnapshotToSupabase,
   upsertSupabaseAsset,
   upsertSupabaseCampaign,
+  upsertSupabaseCampaignBrief,
   upsertSupabaseClipCandidates,
   upsertSupabaseClient,
+  upsertSupabaseMarketReport,
   upsertSupabaseProject,
-  upsertSupabaseRenderJob
+  upsertSupabaseResearchSource,
+  upsertSupabaseRenderJob,
+  upsertSupabaseUgcScript,
+  upsertSupabaseUgcScriptVersion
 } from "./services/supabaseDb.js";
 import { ensureDir, fileExists, readJson, writeJson } from "./utils/files.js";
 import { run } from "./utils/exec.js";
@@ -49,6 +69,84 @@ loadEnv();
 
 const publicDir = path.join(rootDir, "public");
 const port = Number(process.env.PORT || 4173);
+const localIntelligence = createLocalIntelligenceStore(path.join(projectsDir, "intelligence.json"));
+
+function scriptPaths(projectDir) {
+  return {
+    analysis: path.join(projectDir, "analysis", "ugc-script-analysis.json"),
+    script: path.join(projectDir, "generated", "ugc-script.json"),
+    versions: path.join(projectDir, "generated", "ugc-script-versions.json"),
+    reviews: path.join(projectDir, "generated", "ugc-script-review-events.json")
+  };
+}
+
+function transcriptText(value) {
+  if (typeof value === "string") return value.trim();
+  return String(value?.text || value?.transcript || value?.segments?.map((segment) => segment.text).join(" ") || "").trim();
+}
+
+function projectScriptBundle(project, { importLegacy = true } = {}) {
+  const projectDir = safeProject(project);
+  const paths = scriptPaths(projectDir);
+  let script = jsonOrNull(paths.script);
+  let versionsData = jsonOrNull(paths.versions) || { versions: [] };
+  const reviewsData = jsonOrNull(paths.reviews) || { events: [] };
+
+  if (!script && importLegacy) {
+    const legacyPlan = jsonOrNull(path.join(projectDir, "generated", "script-plan.json"));
+    if (legacyPlan?.scenes?.length) {
+      const now = new Date().toISOString();
+      script = {
+        ...importLegacyScriptPlan(legacyPlan),
+        id: `script-${project}`,
+        projectName: project,
+        currentVersionNumber: 0,
+        createdAt: now,
+        updatedAt: now
+      };
+      const created = createScriptVersion({
+        script,
+        versions: [],
+        content: script,
+        changeNote: "Imported legacy script plan",
+        createdBy: "legacy-import",
+        now
+      });
+      const version = { ...created.version, id: `${script.id}-v1` };
+      script = { ...created.script, currentVersionId: version.id };
+      versionsData = { versions: [version] };
+      writeJson(paths.script, script);
+      writeJson(paths.versions, versionsData);
+      writeJson(paths.reviews, reviewsData);
+    }
+  }
+
+  return {
+    analysis: jsonOrNull(paths.analysis),
+    script,
+    versions: Array.isArray(versionsData.versions) ? versionsData.versions : [],
+    reviewEvents: Array.isArray(reviewsData.events) ? reviewsData.events : [],
+    paths
+  };
+}
+
+function writeProjectScriptBundle(bundle) {
+  if (bundle.analysis !== undefined) writeJson(bundle.paths.analysis, bundle.analysis);
+  if (bundle.script) writeJson(bundle.paths.script, bundle.script);
+  writeJson(bundle.paths.versions, { versions: bundle.versions || [] });
+  writeJson(bundle.paths.reviews, { events: bundle.reviewEvents || [] });
+}
+
+function assertScriptReviewRole(currentStatus, nextStatus, user) {
+  const role = user?.role || "admin";
+  if (role === "admin") return;
+  const staffTransitions = new Set(["draft:internal-review", "internal-review:client-review", "internal-review:changes-requested", "changes-requested:draft"]);
+  const clientTransitions = new Set(["client-review:approved", "client-review:changes-requested"]);
+  const transition = `${currentStatus}:${nextStatus}`;
+  if (role === "staff-editor" && staffTransitions.has(transition)) return;
+  if (role === "manager-client" && clientTransitions.has(transition)) return;
+  throw new Error("Your role cannot perform this script review transition.");
+}
 
 function send(res, status, body, headers = {}) {
   const payload = typeof body === "string" || Buffer.isBuffer(body) ? body : JSON.stringify(body, null, 2);
@@ -323,6 +421,7 @@ function getProjectSummary(project) {
   const reference = path.join(dir, "reference", "reference.mp4");
   const renders = listRenders(dir, project);
   const highlights = jsonOrNull(path.join(dir, "clipper", "generated", "highlight-candidates.json"));
+  const ugcScript = jsonOrNull(path.join(dir, "generated", "ugc-script.json"));
   return {
     name: project,
     type: meta.type,
@@ -350,6 +449,9 @@ function getProjectSummary(project) {
     hasGeneratedTranscript: fileExists(path.join(dir, "analysis", "generated-transcript.json")),
     hasSubtitlePlan: fileExists(path.join(dir, "generated", "subtitle-plan.json")),
     hasGeneratedPlan: fileExists(path.join(dir, "generated", "edit-plan.json")),
+    hasMarketReport: Boolean(meta.campaignId && localIntelligence.getCampaign(meta.campaignId).activeReport),
+    hasUgcScript: Boolean(ugcScript),
+    scriptStatus: ugcScript?.status || "",
     hasClipperSource: fileExists(path.join(dir, "clipper", "source", "source-video.mp4")),
     hasClipperTranscript: fileExists(path.join(dir, "clipper", "analysis", "source-transcript.json")),
     hasClipperHighlights: fileExists(path.join(dir, "clipper", "generated", "highlight-candidates.json")),
@@ -454,6 +556,9 @@ async function generate(project, topic) {
 
 function projectData(project) {
   const dir = safeProject(project);
+  const scriptBundle = projectScriptBundle(project);
+  const meta = getProjectMeta(project);
+  const campaignIntelligence = meta.campaignId ? localIntelligence.getCampaign(meta.campaignId) : null;
   return {
     summary: getProjectSummary(project),
     folders: readFolders(),
@@ -472,9 +577,15 @@ function projectData(project) {
     referenceUrl: fileExists(path.join(dir, "reference", "reference.mp4"))
       ? `/media/${encodeURIComponent(project)}/reference/reference.mp4`
       : null,
+    marketReport: campaignIntelligence?.activeReport || null,
+    scriptVersions: scriptBundle.versions,
+    scriptReviewEvents: scriptBundle.reviewEvents,
     files: {
       metadata: jsonOrNull(path.join(dir, "analysis", "metadata.json")),
       transcript: jsonOrNull(path.join(dir, "analysis", "transcript.json")),
+      marketReport: campaignIntelligence?.activeReport || null,
+      scriptAnalysis: scriptBundle.analysis,
+      ugcScript: scriptBundle.script,
       styleAnalysis: jsonOrNull(path.join(dir, "analysis", "style-analysis.json")),
       referenceBlueprint: jsonOrNull(path.join(dir, "analysis", "reference-blueprint.json")),
       generatedTranscript: jsonOrNull(path.join(dir, "analysis", "generated-transcript.json")),
@@ -540,6 +651,52 @@ async function syncProjectRendersToSupabase(project) {
       projectType: summary.type
     });
   }
+}
+
+async function syncLocalIntelligenceToSupabase() {
+  let briefs = 0;
+  let sources = 0;
+  let reports = 0;
+  let scripts = 0;
+  let versions = 0;
+  let reviews = 0;
+  for (const campaign of readOrganization().campaigns) {
+    const intelligence = localIntelligence.getCampaign(campaign.id);
+    const hosted = await supabaseCampaignIntelligence(campaign.id);
+    const briefId = hosted.campaignBrief?.id || intelligence.brief.id || `brief-${campaign.id}`;
+    if (Object.keys(intelligence.brief || {}).length) {
+      await upsertSupabaseCampaignBrief({ ...intelligence.brief, id: briefId, campaignId: campaign.id, title: intelligence.brief.title || intelligence.brief.product || campaign.name });
+      briefs += 1;
+    }
+    for (const source of intelligence.sources) {
+      await upsertSupabaseResearchSource({ ...source, briefId });
+      sources += 1;
+    }
+    for (const report of intelligence.reports) {
+      await upsertSupabaseMarketReport({ ...report, briefId, campaignId: campaign.id });
+      reports += 1;
+    }
+  }
+  for (const project of listProjects()) {
+    const bundle = projectScriptBundle(project.name);
+    if (!bundle.script) continue;
+    await upsertSupabaseUgcScript({ ...bundle.script, projectName: project.name, campaignId: bundle.script.campaignId || project.campaignId });
+    scripts += 1;
+    for (const version of bundle.versions) {
+      await upsertSupabaseUgcScriptVersion(version);
+      versions += 1;
+    }
+    for (const event of bundle.reviewEvents) {
+      await recordSupabaseScriptReviewEvent({
+        ...event,
+        versionId: event.versionId || bundle.script.currentVersionId,
+        fromStatus: event.fromStatus || bundle.script.status,
+        toStatus: event.toStatus || bundle.script.status
+      });
+      reviews += 1;
+    }
+  }
+  return { briefs, sources, reports, scripts, versions, reviews };
 }
 
 const editableFiles = {
@@ -609,7 +766,7 @@ async function handleApi(req, res, url) {
     });
     const created = await createSupabaseProductionJob(job);
     recordActivity("production.queued", projectName, `${jobType} queued`, { jobId: created?.id || "", jobType });
-    const data = hostedDemoMode() ? await supabaseProjectData(projectName) : projectData(projectName);
+    const data = hostedDemoMode() ? await supabaseProjectData(projectName, { user: requestUser }) : projectData(projectName);
     return { ok: true, queued: true, job: created, project: summary, data };
   };
 
@@ -629,6 +786,17 @@ async function handleApi(req, res, url) {
       const summary = await requireHostedProjectAccess(projectName);
       if (requestUser?.role === "manager-client") throw new Error("Editor access required.");
       return summary;
+    };
+    const requireHostedCampaignAccess = async (campaignId, { edit = false } = {}) => {
+      const organization = await listSupabaseOrganization();
+      const campaign = organization.campaigns.find((item) => String(item.id) === String(campaignId));
+      if (!campaign) throw new Error("Campaign not found.");
+      const projects = await hostedProjects();
+      const allowed = edit
+        ? canEditCampaign(campaign, projects, requestUser)
+        : canAccessCampaign(campaign, projects, requestUser);
+      if (!allowed) throw new Error(edit ? "Campaign editor access required." : "Campaign access denied.");
+      return { campaign, projects };
     };
 
     if (req.method === "GET" && url.pathname === "/api/projects") {
@@ -654,6 +822,84 @@ async function handleApi(req, res, url) {
 
     if (req.method === "GET" && url.pathname === "/api/media-library") {
       return sendJson(res, 200, { items: filterMediaForUser(await listSupabaseMediaItems(), requestUser) });
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/intelligence") {
+      const organization = await listSupabaseOrganization();
+      const projects = await hostedProjects();
+      const campaigns = organization.campaigns.filter((campaign) => canAccessCampaign(campaign, projects, requestUser));
+      const intelligence = await Promise.all(campaigns.map(async (campaign) => ({
+        ...campaign,
+        intelligence: await supabaseCampaignIntelligence(campaign.id, { user: requestUser })
+      })));
+      return sendJson(res, 200, { campaigns: intelligence });
+    }
+
+    if (parts[0] === "api" && parts[1] === "campaigns" && parts[2]) {
+      const campaignId = decodeURIComponent(parts[2]);
+      const section = parts[3];
+      const { campaign, projects } = await requireHostedCampaignAccess(campaignId, { edit: req.method !== "GET" });
+
+      if (req.method === "GET" && section === "intelligence") {
+        return sendJson(res, 200, await supabaseCampaignIntelligence(campaignId, { user: requestUser }));
+      }
+
+      if (req.method === "PUT" && section === "brief") {
+        const body = await readJsonBody(req);
+        const current = await supabaseCampaignIntelligence(campaignId, { user: requestUser });
+        const brief = await upsertSupabaseCampaignBrief({
+          ...current.campaignBrief,
+          ...body,
+          id: body.id || current.campaignBrief?.id,
+          campaignId,
+          title: body.title || body.product || campaign.name,
+          createdBy: current.campaignBrief?.createdBy || requestUser?.id,
+          updatedAt: new Date().toISOString()
+        });
+        return sendJson(res, 200, { ok: true, brief, intelligence: await supabaseCampaignIntelligence(campaignId, { user: requestUser }) });
+      }
+
+      if (section === "research-sources" && req.method === "POST" && ["text", "file"].includes(parts[4])) {
+        const intelligence = await supabaseCampaignIntelligence(campaignId, { user: requestUser });
+        if (!intelligence.campaignBrief?.id) throw new Error("Save the campaign brief before adding research sources.");
+        let sourceInput;
+        if (parts[4] === "text") {
+          sourceInput = { ...(await readJsonBody(req)), type: "text" };
+        } else {
+          const fileName = String(req.headers["x-file-name"] || "research.txt");
+          sourceInput = { name: fileName, fileName, type: path.extname(fileName).slice(1).toLowerCase(), content: (await readBody(req)).toString("utf8") };
+        }
+        const source = prepareResearchSource(sourceInput);
+        const saved = await upsertSupabaseResearchSource({ ...source, briefId: intelligence.campaignBrief.id, createdBy: requestUser?.id });
+        return sendJson(res, 201, { ok: true, source: saved, intelligence: await supabaseCampaignIntelligence(campaignId, { user: requestUser }) });
+      }
+
+      if (section === "research-sources" && req.method === "DELETE" && parts[4]) {
+        await deleteSupabaseResearchSource(decodeURIComponent(parts[4]));
+        return sendJson(res, 200, { ok: true, intelligence: await supabaseCampaignIntelligence(campaignId, { user: requestUser }) });
+      }
+
+      if (section === "market-reports" && req.method === "POST" && parts[4] === "generate") {
+        const body = await readJsonBody(req);
+        const project = projects.find((item) => item.campaignId === campaignId && item.type !== "auto-clipper");
+        if (!project) throw new Error("Create an AI Generator project for this campaign before queuing market analysis.");
+        return sendJson(res, 202, await createQueuedJob(project.name, "generate-market-report", { campaignId, sourceIds: body.sourceIds || [] }));
+      }
+
+      if (section === "market-reports" && parts[4]) {
+        const reportId = decodeURIComponent(parts[4]);
+        const intelligence = await supabaseCampaignIntelligence(campaignId, { user: requestUser });
+        if (!intelligence.marketReport || intelligence.marketReport.id !== reportId) throw new Error("Market report not found.");
+        if (req.method === "PUT" && parts.length === 5) {
+          const patch = await readJsonBody(req);
+          const report = await upsertSupabaseMarketReport({ ...intelligence.marketReport, ...patch, id: reportId, campaignId, status: "draft", approvedBy: null, approvedAt: null, updatedAt: new Date().toISOString() });
+          return sendJson(res, 200, { ok: true, report, intelligence: await supabaseCampaignIntelligence(campaignId, { user: requestUser }) });
+        }
+        if (req.method === "POST" && parts[5] === "approve") {
+          const report = await upsertSupabaseMarketReport({ ...intelligence.marketReport, id: reportId, campaignId, status: "approved", approvedBy: requestUser?.id, approvedAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+          return sendJson(res, 200, { ok: true, report, intelligence: await supabaseCampaignIntelligence(campaignId, { user: requestUser }) });
+        }
+      }
     }
 
     if (req.method === "POST" && url.pathname === "/api/projects") {
@@ -684,7 +930,7 @@ async function handleApi(req, res, url) {
 
       if (req.method === "GET" && parts.length === 3) {
         await requireHostedProjectAccess(project);
-        const data = await supabaseProjectData(project);
+        const data = await supabaseProjectData(project, { user: requestUser });
         if (!data) throw new Error("Project not found.");
         return sendJson(res, 200, data);
       }
@@ -739,10 +985,87 @@ async function handleApi(req, res, url) {
         return sendJson(res, 200, {
           ok: true,
           project: next,
-          data: await supabaseProjectData(project),
+          data: await supabaseProjectData(project, { user: requestUser }),
           projects: await hostedVisibleProjects(),
           folders: []
         });
+      }
+
+      if (parts[3] === "ugc-script" && req.method === "POST" && ["analyze", "generate"].includes(parts[4])) {
+        const summary = await requireHostedEditorAccess(project);
+        const body = await readJsonBody(req);
+        const jobType = parts[4] === "analyze" ? "analyze-ugc-script" : "generate-ugc-script";
+        return sendJson(res, 202, await createQueuedJob(project, jobType, { ...body, campaignId: summary.campaignId }));
+      }
+
+      if (parts[3] === "ugc-script" && req.method === "PUT" && parts.length === 4) {
+        await requireHostedEditorAccess(project);
+        const body = await readJsonBody(req);
+        const bundle = await supabaseProjectScriptBundle(project, { user: requestUser });
+        if (!bundle.ugcScript) throw new Error("Generate a UGC script before editing it.");
+        const currentVersionId = bundle.ugcScript.currentVersionId || bundle.ugcScript.versionId;
+        if (body.baseVersionId && body.baseVersionId !== currentVersionId) throw new Error("This script changed since it was opened. Reload before saving.");
+        let script = {
+          ...bundle.ugcScript,
+          hooks: Array.isArray(body.hooks) ? body.hooks : bundle.ugcScript.hooks,
+          scenes: Array.isArray(body.scenes) ? body.scenes : bundle.ugcScript.scenes,
+          status: "draft",
+          updatedBy: requestUser?.id,
+          updatedAt: new Date().toISOString()
+        };
+        script = selectHook(script, body.selectedHookId || script.selectedHookId || script.hooks[0]?.id);
+        const created = createScriptVersion({
+          script,
+          versions: bundle.scriptVersions,
+          content: script,
+          changeNote: body.changeNote || "Edited in UGC Script Studio",
+          createdBy: requestUser?.id || ""
+        });
+        const savedScript = await upsertSupabaseUgcScript({ ...created.script, projectName: project });
+        const savedVersion = await upsertSupabaseUgcScriptVersion(created.version);
+        return sendJson(res, 200, { ok: true, result: savedScript, version: savedVersion, data: await supabaseProjectData(project, { user: requestUser }) });
+      }
+
+      if (parts[3] === "ugc-script" && req.method === "POST" && parts[4] === "review") {
+        await requireHostedProjectAccess(project);
+        const body = await readJsonBody(req);
+        const bundle = await supabaseProjectScriptBundle(project, { user: requestUser });
+        if (!bundle.ugcScript) throw new Error("Generate a UGC script before reviewing it.");
+        const versionId = bundle.ugcScript.currentVersionId || bundle.ugcScript.versionId;
+        assertScriptReviewRole(bundle.ugcScript.status, body.status, requestUser);
+        const transitioned = transitionScriptStatus(bundle.ugcScript, body.status, { versionId, actorId: requestUser?.id || "", feedback: body.feedback });
+        const savedScript = await upsertSupabaseUgcScript({ ...transitioned.script, projectName: project, updatedBy: requestUser?.id });
+        const event = await recordSupabaseScriptReviewEvent(transitioned.event);
+        return sendJson(res, 200, { ok: true, result: savedScript, event, data: await supabaseProjectData(project, { user: requestUser }) });
+      }
+
+      if (req.method === "POST" && parts[3] === "generate-ugc-video") {
+        await requireHostedEditorAccess(project);
+        const body = await readJsonBody(req);
+        const bundle = await supabaseProjectScriptBundle(project, { user: requestUser });
+        if (!bundle.ugcScript) throw new Error("Generate and approve a UGC script before video generation.");
+        const versionId = bundle.ugcScript.currentVersionId || bundle.ugcScript.versionId;
+        const eligibility = assertVideoGenerationEligible(bundle.ugcScript, {
+          role: requestUser?.role,
+          isAdmin: requestUser?.role === "admin",
+          overrideReason: body.overrideReason,
+          versionId,
+          actorId: requestUser?.id || ""
+        });
+        if (eligibility.auditEvent) await recordSupabaseScriptReviewEvent({
+          ...eligibility.auditEvent,
+          versionId,
+          fromStatus: bundle.ugcScript.status,
+          toStatus: bundle.ugcScript.status
+        });
+        return sendJson(res, 202, await createQueuedJob(project, "generate-ugc-video", {
+          ...body,
+          marketReportId: bundle.ugcScript.marketReportId,
+          scriptId: bundle.ugcScript.id,
+          scriptVersionId: versionId,
+          selectedHookId: bundle.ugcScript.selectedHookId,
+          override: eligibility.overridden ? eligibility.auditEvent : null
+        }));
       }
 
       const queueMap = {
@@ -751,7 +1074,6 @@ async function handleApi(req, res, url) {
         "generate": "generate-content",
         "images": "generate-images",
         "videos": "generate-videos",
-        "generate-ugc-video": "generate-ugc-video",
         "transcribe-generated-video": "transcribe-generated-video",
         "voiceover": "generate-voiceover",
         "render": "render-final-video",
@@ -780,9 +1102,138 @@ async function handleApi(req, res, url) {
         }
         if (parts[4] === "select-highlight") {
           await requireHostedEditorAccess(project);
-          return sendJson(res, 200, { ok: true, data: await supabaseProjectData(project) });
+          return sendJson(res, 200, { ok: true, data: await supabaseProjectData(project, { user: requestUser }) });
         }
       }
+    }
+  }
+
+  const localCampaign = (campaignId) => readOrganization().campaigns.find((campaign) => campaign.id === campaignId);
+  const requireLocalCampaign = (campaignId, { edit = false } = {}) => {
+    const campaign = localCampaign(campaignId);
+    if (!campaign) throw new Error("Campaign not found.");
+    const allowed = edit
+      ? canEditCampaign(campaign, allProjects(), requestUser)
+      : canAccessCampaign(campaign, allProjects(), requestUser);
+    if (!allowed) throw new Error(edit ? "Campaign editor access required." : "Campaign access denied.");
+    return campaign;
+  };
+  const visibleCampaignIntelligence = (campaignId) => {
+    const intelligence = localIntelligence.getCampaign(campaignId);
+    if (requestUser?.role !== "manager-client") return intelligence;
+    const reports = intelligence.reports.filter((report) => report.status === "approved");
+    return {
+      brief: intelligence.brief,
+      sources: [],
+      reports,
+      activeReportId: reports.find((report) => report.id === intelligence.activeReportId)?.id || reports.at(-1)?.id || "",
+      activeReport: reports.find((report) => report.id === intelligence.activeReportId) || reports.at(-1) || null
+    };
+  };
+
+  if (req.method === "GET" && url.pathname === "/api/intelligence") {
+    const organization = readOrganization();
+    const campaigns = organization.campaigns
+      .filter((campaign) => canAccessCampaign(campaign, allProjects(), requestUser))
+      .map((campaign) => ({ ...campaign, intelligence: visibleCampaignIntelligence(campaign.id) }));
+    return sendJson(res, 200, { campaigns });
+  }
+
+  if (parts[0] === "api" && parts[1] === "campaigns" && parts[2]) {
+    const campaignId = decodeURIComponent(parts[2]);
+    const section = parts[3];
+
+    if (req.method === "GET" && section === "intelligence") {
+      requireLocalCampaign(campaignId);
+      return sendJson(res, 200, visibleCampaignIntelligence(campaignId));
+    }
+
+    if (req.method === "PUT" && section === "brief") {
+      requireLocalCampaign(campaignId, { edit: true });
+      const brief = { ...(await readJsonBody(req)), id: `brief-${campaignId}`, campaignId };
+      localIntelligence.saveBrief(campaignId, brief);
+      const supabaseWarning = await trySupabaseWrite(async () => {
+        const hosted = await supabaseCampaignIntelligence(campaignId);
+        await upsertSupabaseCampaignBrief({ ...brief, id: hosted.campaignBrief?.id || brief.id, title: brief.title || brief.product || localCampaign(campaignId).name, createdBy: requestUser?.id || null });
+      });
+      return sendJson(res, 200, { ok: true, intelligence: visibleCampaignIntelligence(campaignId), supabaseWarning });
+    }
+
+    if (section === "research-sources" && req.method === "POST" && ["text", "file"].includes(parts[4])) {
+      requireLocalCampaign(campaignId, { edit: true });
+      let sourceInput;
+      if (parts[4] === "text") {
+        const body = await readJsonBody(req);
+        sourceInput = { ...body, type: "text" };
+      } else {
+        const fileName = String(req.headers["x-file-name"] || "research.txt");
+        const type = path.extname(fileName).slice(1).toLowerCase() || "txt";
+        sourceInput = { name: fileName, fileName, type, content: (await readBody(req)).toString("utf8") };
+      }
+      const source = prepareResearchSource(sourceInput);
+      source.createdBy = requestUser?.id || "local";
+      source.createdAt = new Date().toISOString();
+      localIntelligence.addSource(campaignId, source);
+      const supabaseWarning = await trySupabaseWrite(async () => {
+        const intelligence = localIntelligence.getCampaign(campaignId);
+        const hosted = await supabaseCampaignIntelligence(campaignId);
+        const briefId = hosted.campaignBrief?.id || intelligence.brief.id || `brief-${campaignId}`;
+        await upsertSupabaseCampaignBrief({ ...intelligence.brief, id: briefId, campaignId, title: intelligence.brief.title || intelligence.brief.product || localCampaign(campaignId).name });
+        await upsertSupabaseResearchSource({ ...source, briefId });
+      });
+      return sendJson(res, 201, { ok: true, source, intelligence: visibleCampaignIntelligence(campaignId), supabaseWarning });
+    }
+
+    if (section === "research-sources" && req.method === "DELETE" && parts[4]) {
+      requireLocalCampaign(campaignId, { edit: true });
+      const sourceId = decodeURIComponent(parts[4]);
+      localIntelligence.deleteSource(campaignId, sourceId);
+      const supabaseWarning = await trySupabaseWrite(() => deleteSupabaseResearchSource(sourceId));
+      return sendJson(res, 200, { ok: true, intelligence: visibleCampaignIntelligence(campaignId), supabaseWarning });
+    }
+
+    if (section === "market-reports" && req.method === "POST" && parts[4] === "generate") {
+      requireLocalCampaign(campaignId, { edit: true });
+      const body = await readJsonBody(req);
+      const intelligence = localIntelligence.getCampaign(campaignId);
+      const requestedIds = new Set(Array.isArray(body.sourceIds) ? body.sourceIds : []);
+      const sources = requestedIds.size ? intelligence.sources.filter((source) => requestedIds.has(source.id)) : intelligence.sources;
+      if (shouldQueueEngine()) {
+        throw new Error("Hosted market-report generation must be queued through Supabase.");
+      }
+      const generated = await generateMarketReport({ brief: intelligence.brief, sources });
+      const report = localIntelligence.saveReport(campaignId, {
+        ...generated,
+        id: `report-${Date.now()}`,
+        status: "draft",
+        sourceIds: sources.map((source) => source.id),
+        createdBy: requestUser?.id || "local"
+      });
+      const supabaseWarning = await trySupabaseWrite(async () => {
+        const hosted = await supabaseCampaignIntelligence(campaignId);
+        await upsertSupabaseMarketReport({ ...report, briefId: hosted.campaignBrief?.id || intelligence.brief.id || `brief-${campaignId}`, campaignId });
+      });
+      return sendJson(res, 201, { ok: true, report, intelligence: visibleCampaignIntelligence(campaignId), supabaseWarning });
+    }
+
+    if (section === "market-reports" && parts[4] && req.method === "PUT") {
+      requireLocalCampaign(campaignId, { edit: true });
+      const report = localIntelligence.updateReport(campaignId, decodeURIComponent(parts[4]), { ...(await readJsonBody(req)), status: "draft", approvedBy: "", approvedAt: "" });
+      const supabaseWarning = await trySupabaseWrite(async () => {
+        const hosted = await supabaseCampaignIntelligence(campaignId);
+        await upsertSupabaseMarketReport({ ...report, briefId: hosted.campaignBrief?.id || localIntelligence.getCampaign(campaignId).brief.id || `brief-${campaignId}`, campaignId });
+      });
+      return sendJson(res, 200, { ok: true, report, intelligence: visibleCampaignIntelligence(campaignId), supabaseWarning });
+    }
+
+    if (section === "market-reports" && parts[4] && parts[5] === "approve" && req.method === "POST") {
+      requireLocalCampaign(campaignId, { edit: true });
+      const report = localIntelligence.approveReport(campaignId, decodeURIComponent(parts[4]), requestUser?.id || "local-admin");
+      const supabaseWarning = await trySupabaseWrite(async () => {
+        const hosted = await supabaseCampaignIntelligence(campaignId);
+        await upsertSupabaseMarketReport({ ...report, briefId: hosted.campaignBrief?.id || localIntelligence.getCampaign(campaignId).brief.id || `brief-${campaignId}`, campaignId });
+      });
+      return sendJson(res, 200, { ok: true, report, intelligence: visibleCampaignIntelligence(campaignId), supabaseWarning });
     }
   }
 
@@ -821,11 +1272,13 @@ async function handleApi(req, res, url) {
 
   if (req.method === "POST" && url.pathname === "/api/supabase/sync-local") {
     requireAdmin();
-    const result = await syncLocalSnapshotToSupabase({
+    const core = await syncLocalSnapshotToSupabase({
       organization: readOrganization(),
       projects: allProjects(),
       mediaItems: mediaLibrary()
     });
+    const intelligence = await syncLocalIntelligenceToSupabase();
+    const result = { core, intelligence };
     return sendJson(res, 200, { ok: true, result, status: await supabaseStatus() });
   }
 
@@ -1036,15 +1489,170 @@ async function handleApi(req, res, url) {
       return sendJson(res, 200, { ok: true, result, data: projectData(project) });
     }
 
+    if (parts[3] === "ugc-script" && req.method === "POST" && parts[4] === "analyze") {
+      requireEditorAccess(project);
+      const body = await readJsonBody(req);
+      if (shouldQueueEngine()) return sendJson(res, 202, await createQueuedJob(project, "analyze-ugc-script", body));
+      const projectDir = safeProject(project);
+      const transcript = body.mode === "manual"
+        ? String(body.manualTranscript || "").trim()
+        : transcriptText(jsonOrNull(path.join(projectDir, "analysis", "transcript.json")));
+      if (!transcript) throw new Error(body.mode === "manual" ? "Paste an inspiration transcript before analysis." : "Analyze the reference video or paste a transcript first.");
+      const result = await analyzeUgcInspiration({ transcript });
+      const bundle = projectScriptBundle(project);
+      bundle.analysis = result;
+      writeProjectScriptBundle(bundle);
+      return sendJson(res, 200, { ok: true, result, data: projectData(project) });
+    }
+
+    if (parts[3] === "ugc-script" && req.method === "POST" && parts[4] === "generate") {
+      requireEditorAccess(project);
+      const body = await readJsonBody(req);
+      if (shouldQueueEngine()) return sendJson(res, 202, await createQueuedJob(project, "generate-ugc-script", body));
+      const meta = getProjectMeta(project);
+      if (!meta.campaignId) throw new Error("Assign this project to a campaign before script generation.");
+      const intelligence = localIntelligence.getCampaign(meta.campaignId);
+      const report = intelligence.reports.find((item) => item.id === body.marketReportId)
+        || intelligence.activeReport;
+      if (!report) throw new Error("Generate a market report for this campaign first.");
+      const projectDir = safeProject(project);
+      const transcript = transcriptText(jsonOrNull(path.join(projectDir, "analysis", "transcript.json")));
+      const generated = await generateUgcScript({
+        title: `${project} UGC Script`,
+        transcript,
+        scriptwriterInput: report.scriptwriterInput,
+        marketReportId: report.id,
+        reportStatus: report.status,
+        role: requestUser?.role,
+        isAdmin: requestUser?.role === "admin",
+        overrideReason: body.overrideReason
+      });
+      const now = new Date().toISOString();
+      let script = selectHook({
+        ...generated,
+        id: `script-${project}`,
+        projectName: project,
+        campaignId: meta.campaignId,
+        currentVersionNumber: 0,
+        createdAt: now,
+        updatedAt: now
+      }, generated.hooks[0].id);
+      const bundle = projectScriptBundle(project, { importLegacy: false });
+      const created = createScriptVersion({
+        script,
+        versions: bundle.versions,
+        content: script,
+        changeNote: "Generated from approved market intelligence",
+        createdBy: requestUser?.id || "local",
+        now
+      });
+      const version = { ...created.version, id: `${script.id}-v${created.version.versionNumber}` };
+      script = { ...created.script, currentVersionId: version.id };
+      bundle.script = script;
+      bundle.versions = [...bundle.versions, version];
+      writeProjectScriptBundle(bundle);
+      writeJson(path.join(projectDir, "analysis", "market-report.json"), report);
+      const supabaseWarning = await trySupabaseWrite(async () => {
+        await upsertSupabaseUgcScript({ ...script, marketReportId: report.id, campaignId: meta.campaignId, projectName: project, createdBy: requestUser?.id || null });
+        await upsertSupabaseUgcScriptVersion(version);
+      });
+      return sendJson(res, 200, { ok: true, result: script, data: projectData(project), supabaseWarning });
+    }
+
+    if (parts[3] === "ugc-script" && req.method === "PUT" && parts.length === 4) {
+      requireEditorAccess(project);
+      const body = await readJsonBody(req);
+      const bundle = projectScriptBundle(project);
+      if (!bundle.script) throw new Error("Generate a UGC script before editing it.");
+      if (body.baseVersionId && body.baseVersionId !== bundle.script.currentVersionId) {
+        throw new Error("This script changed since it was opened. Reload the latest version before saving.");
+      }
+      let script = {
+        ...bundle.script,
+        hooks: Array.isArray(body.hooks) ? body.hooks : bundle.script.hooks,
+        scenes: Array.isArray(body.scenes) ? body.scenes : bundle.script.scenes,
+        status: "draft",
+        updatedAt: new Date().toISOString()
+      };
+      script = selectHook(script, body.selectedHookId || script.selectedHookId || script.hooks[0]?.id);
+      const created = createScriptVersion({
+        script,
+        versions: bundle.versions,
+        content: script,
+        changeNote: body.changeNote || "Edited in UGC Script Studio",
+        createdBy: requestUser?.id || "local"
+      });
+      const version = { ...created.version, id: `${script.id}-v${created.version.versionNumber}` };
+      bundle.script = { ...created.script, currentVersionId: version.id };
+      bundle.versions = [...bundle.versions, version];
+      writeProjectScriptBundle(bundle);
+      const supabaseWarning = await trySupabaseWrite(async () => {
+        await upsertSupabaseUgcScript({ ...bundle.script, projectName: project, updatedBy: requestUser?.id || null });
+        await upsertSupabaseUgcScriptVersion(version);
+      });
+      return sendJson(res, 200, { ok: true, result: bundle.script, data: projectData(project), supabaseWarning });
+    }
+
+    if (parts[3] === "ugc-script" && req.method === "POST" && parts[4] === "review") {
+      requireProjectAccess(project);
+      const body = await readJsonBody(req);
+      const bundle = projectScriptBundle(project);
+      if (!bundle.script) throw new Error("Generate a UGC script before reviewing it.");
+      assertScriptReviewRole(bundle.script.status, body.status, requestUser);
+      const transitioned = transitionScriptStatus(bundle.script, body.status, {
+        versionId: bundle.script.currentVersionId,
+        actorId: requestUser?.id || "local",
+        feedback: body.feedback
+      });
+      const event = { ...transitioned.event, id: `${bundle.script.id}-review-${bundle.reviewEvents.length + 1}` };
+      bundle.script = transitioned.script;
+      bundle.reviewEvents = [...bundle.reviewEvents, event];
+      writeProjectScriptBundle(bundle);
+      const supabaseWarning = await trySupabaseWrite(async () => {
+        await upsertSupabaseUgcScript({ ...bundle.script, projectName: project, updatedBy: requestUser?.id || null });
+        await recordSupabaseScriptReviewEvent(event);
+      });
+      return sendJson(res, 200, { ok: true, result: bundle.script, event, data: projectData(project), supabaseWarning });
+    }
+
     if (req.method === "POST" && parts[3] === "generate-ugc-video") {
       requireEditorAccess(project);
       const body = await readJsonBody(req);
-      if (shouldQueueEngine()) return sendJson(res, 202, await createQueuedJob(project, "generate-ugc-video", body));
       const projectDir = safeProject(project);
+      const scriptBundle = projectScriptBundle(project);
+      if (!scriptBundle.script) throw new Error("Generate and approve a UGC script before video generation.");
+      const eligibility = assertVideoGenerationEligible(scriptBundle.script, {
+        role: requestUser?.role,
+        isAdmin: requestUser?.role === "admin",
+        overrideReason: body.overrideReason,
+        versionId: scriptBundle.script.currentVersionId,
+        actorId: requestUser?.id || "local"
+      });
+      if (eligibility.auditEvent) {
+        scriptBundle.reviewEvents = [...scriptBundle.reviewEvents, { ...eligibility.auditEvent, id: `${scriptBundle.script.id}-override-${scriptBundle.reviewEvents.length + 1}` }];
+        writeProjectScriptBundle(scriptBundle);
+      }
+      const meta = getProjectMeta(project);
+      const campaign = meta.campaignId ? localIntelligence.getCampaign(meta.campaignId) : null;
+      const payload = {
+        ...body,
+        marketReportId: scriptBundle.script.marketReportId || campaign?.activeReportId || "",
+        scriptId: scriptBundle.script.id,
+        scriptVersionId: scriptBundle.script.currentVersionId,
+        selectedHookId: scriptBundle.script.selectedHookId,
+        override: eligibility.overridden ? eligibility.auditEvent : null
+      };
+      if (shouldQueueEngine()) return sendJson(res, 202, await createQueuedJob(project, "generate-ugc-video", payload));
       const blueprint = jsonOrNull(path.join(projectDir, "analysis", "reference-blueprint.json"))
         || jsonOrNull(path.join(projectDir, "analysis", "style-analysis.json"));
       if (!blueprint) throw new Error("Missing reference blueprint. Analyze reference first.");
-      const result = await generateLibTvUgcVideo({ projectDir, blueprint, maxSeconds: body.maxSeconds || 300 });
+      const result = await generateLibTvUgcVideo({
+        projectDir,
+        blueprint,
+        script: scriptBundle.script,
+        campaignBrief: campaign?.brief || null,
+        maxSeconds: body.maxSeconds || 300
+      });
       return sendJson(res, 200, { ok: true, result, data: projectData(project) });
     }
 

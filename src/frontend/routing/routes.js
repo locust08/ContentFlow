@@ -17,6 +17,8 @@ export function canAccessPath(role, pathname) {
   }
   if (role === "staff-editor") {
     return pathname === "/studio"
+      || pathname === "/intelligence"
+      || /^\/campaigns\/[^/]+\/intelligence$/.test(pathname)
       || pathname === "/projects"
       || pathname.startsWith("/projects/")
       || pathname === "/media"
@@ -29,4 +31,8 @@ export function canAccessPath(role, pathname) {
 export function getProjectPath(project) {
   const workspace = project.type === "auto-clipper" ? "auto-clipper" : "ai-generator";
   return `/projects/${encodeURIComponent(project.name)}/${workspace}`;
+}
+
+export function getCampaignIntelligencePath(campaign) {
+  return `/campaigns/${encodeURIComponent(campaign)}/intelligence`;
 }
