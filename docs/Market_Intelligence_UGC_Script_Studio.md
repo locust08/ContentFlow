@@ -310,3 +310,13 @@ For FYP evidence, capture the role dashboard, research uploader, seven-pillar re
 ## 12. FYP Alignment
 
 This feature strengthens the project as an information system rather than only an AI generator. It manages campaign records, research documents, structured findings, project assignments, script versions, approvals, production jobs, final media, and analytical metrics across web/mobile role views and an enterprise DBMS. It addresses fragmented creative research, untraceable content decisions, repeated manual scripting, weak approval tracking, and limited production monitoring while providing quantifiable data for management evaluation.
+
+## 13. Verified Interface Evidence
+
+Desktop Market Intelligence workspace:
+
+![Desktop Market Intelligence workspace](design-qa-assets/market-intelligence-desktop.png)
+
+Mobile responsive Market Intelligence workspace:
+
+![Mobile Market Intelligence workspace](design-qa-assets/market-intelligence-mobile.png)
