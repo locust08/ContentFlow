@@ -43,6 +43,7 @@ test("schema defines the market intelligence and UGC domain with relationships a
   assert.match(sql, /version_id text not null references cf_ugc_script_versions\(id\) on delete restrict/i);
   assert.match(sql, /status in \('draft', 'ready', 'approved', 'archived'\)/i);
   assert.match(sql, /selected_hook_id text/i);
+  assert.match(sql, /alter table cf_production_jobs add column if not exists result jsonb/i);
   assert.match(sql, /current_version_number integer not null default 0/i);
   assert.match(sql, /unique \(script_id, version_number\)/i);
 });

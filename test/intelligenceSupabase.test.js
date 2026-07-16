@@ -285,6 +285,14 @@ test("project data exposes intelligence and script files", () => {
   assert.equal(data.scriptVersions.length, 1);
   assert.equal(data.scriptReviewEvents.length, 1);
   assert.equal(Object.hasOwn(data.files, "scriptVersions"), false);
+
+  const analysisOnly = buildSupabaseProjectData({
+    summary: { name: "launch" }, organization: { clients: [], campaigns: [], staff: [] },
+    assets: [], renders: [], candidates: [],
+    scriptBundle: { ugcScript: null, scriptAnalysis: null, scriptVersions: [], scriptReviewEvents: [] },
+    analysisJob: { result: { angle: "Problem to solution", format: "Founder-style" } }
+  });
+  assert.deepEqual(analysisOnly.files.scriptAnalysis, { angle: "Problem to solution", format: "Founder-style" });
 });
 
 test("hosted analytics includes empty-safe market and script metrics", async () => {

@@ -1072,7 +1072,8 @@ export function buildSupabaseProjectData({
   renders,
   candidates,
   intelligence = emptyCampaignIntelligence(),
-  scriptBundle = emptyProjectScriptBundle()
+  scriptBundle = emptyProjectScriptBundle(),
+  analysisJob = null
 }) {
   const assetRows = Array.isArray(assets) ? assets : assets.rows;
   const renderRows = Array.isArray(renders) ? renders : renders.rows;
@@ -1134,7 +1135,7 @@ export function buildSupabaseProjectData({
     files: {
       clipperHighlights: clipCandidates.length ? { candidates: clipCandidates } : null,
       marketReport: intelligence.marketReport || null,
-      scriptAnalysis: scriptBundle.scriptAnalysis || null,
+      scriptAnalysis: scriptBundle.scriptAnalysis || analysisJob?.result || null,
       ugcScript: scriptBundle.ugcScript || null
     }
   };
@@ -1145,29 +1146,35 @@ export async function supabaseProjectData(projectName, { user = null } = {}) {
     const summaries = await listSupabaseProjectSummaries();
     const summary = summaries.find((project) => project.name === projectName);
     if (!summary) return null;
-    const [organization, assets, renders, candidates, intelligence, scriptBundle] = await Promise.all([
+    const [organization, assets, renders, candidates, intelligence, scriptBundle, analysisRows] = await Promise.all([
       listSupabaseOrganization(),
       restTable("cf_assets", `select=*&project_name=eq.${eq(projectName)}&order=created_at.desc`),
       restTable("cf_render_jobs", `select=*&project_name=eq.${eq(projectName)}&order=created_at.desc`),
       restTable("cf_clip_candidates", `select=*&project_name=eq.${eq(projectName)}&order=score.desc,start_seconds.asc`),
       summary.campaignId ? supabaseCampaignIntelligence(summary.campaignId, { user }) : emptyCampaignIntelligence(),
-      supabaseProjectScriptBundle(projectName, { user })
+      supabaseProjectScriptBundle(projectName, { user }),
+      isClientUser(user)
+        ? Promise.resolve([])
+        : restTable("cf_production_jobs", `select=*&project_name=eq.${eq(projectName)}&job_type=eq.analyze-ugc-script&status=eq.completed&order=completed_at.desc&limit=1`)
     ]);
-    return buildSupabaseProjectData({ summary, organization, assets, renders, candidates, intelligence, scriptBundle });
+    return buildSupabaseProjectData({ summary, organization, assets, renders, candidates, intelligence, scriptBundle, analysisJob: mapProductionJob(analysisRows[0]) });
   }
   if (!await ensureSupabaseReady()) return null;
   const summaries = await listSupabaseProjectSummaries();
   const summary = summaries.find((project) => project.name === projectName);
   if (!summary) return null;
-  const [organization, assets, renders, candidates, intelligence, scriptBundle] = await Promise.all([
+  const [organization, assets, renders, candidates, intelligence, scriptBundle, analysisResult] = await Promise.all([
     listSupabaseOrganization(),
     getPool().query("select * from cf_assets where project_name = $1 order by created_at desc", [projectName]),
     getPool().query("select * from cf_render_jobs where project_name = $1 order by created_at desc", [projectName]),
     getPool().query("select * from cf_clip_candidates where project_name = $1 order by score desc, start_seconds asc", [projectName]),
     summary.campaignId ? supabaseCampaignIntelligence(summary.campaignId, { user }) : emptyCampaignIntelligence(),
-    supabaseProjectScriptBundle(projectName, { user })
+    supabaseProjectScriptBundle(projectName, { user }),
+    isClientUser(user)
+      ? Promise.resolve({ rows: [] })
+      : getPool().query("select * from cf_production_jobs where project_name = $1 and job_type = 'analyze-ugc-script' and status = 'completed' order by completed_at desc limit 1", [projectName])
   ]);
-  return buildSupabaseProjectData({ summary, organization, assets, renders, candidates, intelligence, scriptBundle });
+  return buildSupabaseProjectData({ summary, organization, assets, renders, candidates, intelligence, scriptBundle, analysisJob: mapProductionJob(analysisResult.rows[0]) });
 }
 
 export async function recordSupabaseApprovalEvent({ projectName, status, feedback = "" }) {
@@ -1322,6 +1329,7 @@ function mapProductionJob(row) {
     payload: row.payload || {},
     requestedBy: row.requested_by || "",
     outputUrl: row.output_url || "",
+    result: objectValue(row.result, {}),
     error: row.error || "",
     createdAt: row.created_at,
     startedAt: row.started_at,
@@ -1525,6 +1533,7 @@ export async function updateSupabaseProductionJob(id, patch = {}) {
       body: {
         status,
         output_url: patch.outputUrl || null,
+        ...(patch.result !== undefined ? { result: patch.result || {} } : {}),
         error: patch.error || null,
         completed_at: completedAt,
         updated_at: new Date().toISOString()
@@ -1538,11 +1547,12 @@ export async function updateSupabaseProductionJob(id, patch = {}) {
       set status = $2,
         output_url = $3,
         error = $4,
-        completed_at = coalesce($5::timestamptz, completed_at),
+        result = coalesce($5::jsonb, result),
+        completed_at = coalesce($6::timestamptz, completed_at),
         updated_at = now()
       where id = $1
       returning *
-    `, [id, status, patch.outputUrl || null, patch.error || null, completedAt]);
+    `, [id, status, patch.outputUrl || null, patch.error || null, patch.result === undefined ? null : JSON.stringify(patch.result || {}), completedAt]);
     job = mapProductionJob(result.rows[0]);
   }
   if (job && (status === "completed" || status === "failed")) {

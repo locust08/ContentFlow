@@ -261,7 +261,8 @@ async function tick() {
     const result = await processJob(job);
     await updateSupabaseProductionJob(job.id, {
       status: "completed",
-      outputUrl: result?.outputUrl || result?.output || result?.url || ""
+      outputUrl: result?.outputUrl || result?.output || result?.url || "",
+      result
     });
     console.log(`[worker] completed ${job.id}`);
   } catch (error) {

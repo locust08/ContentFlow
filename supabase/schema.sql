@@ -105,6 +105,7 @@ create table if not exists cf_production_jobs (
   payload jsonb not null default '{}'::jsonb,
   requested_by text,
   output_url text,
+  result jsonb not null default '{}'::jsonb,
   error text,
   created_at timestamptz not null default now(),
   started_at timestamptz,
@@ -228,6 +229,7 @@ alter table cf_users add column if not exists client_id text;
 alter table cf_ugc_scripts alter column market_report_id drop not null;
 alter table cf_ugc_scripts alter column campaign_id drop not null;
 alter table cf_render_jobs add column if not exists output_url text;
+alter table cf_production_jobs add column if not exists result jsonb not null default '{}'::jsonb;
 
 create index if not exists idx_cf_users_auth_user on cf_users(auth_user_id);
 create index if not exists idx_cf_users_email on cf_users(lower(email));
