@@ -164,19 +164,23 @@ async function restUpsertDomainRow(table, row, { conflict = "id", match = "" } =
 }
 
 export function mapSupabaseCampaignBriefRow(row) {
-  return row ? {
+  if (!row) return null;
+  const brief = objectValue(row.brief, {});
+  return {
+    ...brief,
     id: row.id,
     campaignId: row.campaign_id || "",
     title: row.title,
     productName: row.product_name || "",
+    product: brief.product || row.product_name || "",
     objective: row.objective || "",
     targetAudience: row.target_audience || "",
-    brief: objectValue(row.brief, {}),
+    brief,
     status: row.status || "draft",
     createdBy: row.created_by || "",
     createdAt: row.created_at,
     updatedAt: row.updated_at
-  } : null;
+  };
 }
 
 export function mapSupabaseResearchSourceRow(row) {

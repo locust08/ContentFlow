@@ -46,11 +46,12 @@ function withHostedSupabase(run) {
 test("maps intelligence and script rows to camelCase domain objects", () => {
   assert.deepEqual(mapSupabaseCampaignBriefRow({
     id: "brief-1", campaign_id: "campaign-1", title: "Launch", product_name: "Serum",
-    target_audience: "Busy parents", brief: { offer: "20% off" }, created_by: "author",
+    target_audience: "Busy parents", brief: { brand: "Glow Co", offer: "20% off", brandVoice: "Warm" }, created_by: "author",
     created_at: "created", updated_at: "updated"
   }), {
-    id: "brief-1", campaignId: "campaign-1", title: "Launch", productName: "Serum",
-    objective: "", targetAudience: "Busy parents", brief: { offer: "20% off" }, status: "draft",
+    brand: "Glow Co", offer: "20% off", brandVoice: "Warm",
+    id: "brief-1", campaignId: "campaign-1", title: "Launch", productName: "Serum", product: "Serum",
+    objective: "", targetAudience: "Busy parents", brief: { brand: "Glow Co", offer: "20% off", brandVoice: "Warm" }, status: "draft",
     createdBy: "author", createdAt: "created", updatedAt: "updated"
   });
 
