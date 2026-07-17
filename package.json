@@ -13,6 +13,13 @@
     "seed:demo": "node src/cli/seedDemoUsers.js",
     "worker": "node src/worker/productionWorker.js",
     "worker:once": "node src/worker/productionWorker.js --once",
+    "cloudflare:dev": "wrangler dev --env preview",
+    "cloudflare:migrate:preview": "wrangler d1 migrations apply contentflow-ai-preview --remote --env preview",
+    "cloudflare:data:migrate:preview": "node scripts/cloudflare/migrateSupabaseData.js --environment preview",
+    "cloudflare:media:plan": "node scripts/cloudflare/migrateLocalMedia.js --environment preview --dry-run",
+    "cloudflare:media:migrate:preview": "node scripts/cloudflare/migrateLocalMedia.js --environment preview",
+    "cloudflare:deploy:preview": "npm run build && wrangler deploy --env preview",
+    "cloudflare:deploy": "npm run build && wrangler deploy",
     "build": "npm run build:frontend",
     "dev:frontend": "vite --config src/frontend/vite.config.js",
     "build:frontend": "vite build --config src/frontend/vite.config.js",
@@ -39,6 +46,7 @@
     "jsdom": "^29.1.1",
     "playwright": "^1.61.1",
     "vite": "^8.1.4",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "wrangler": "^4.111.0"
   }
 }

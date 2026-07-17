@@ -1,4 +1,5 @@
 import { loadEnv } from "../config.js";
+import { fileURLToPath } from "node:url";
 import { readOrganization } from "../services/organization.js";
 import {
   initializeSupabaseSchema,
@@ -12,6 +13,37 @@ loadEnv();
 
 function envValue(key) {
   return String(process.env[key] || "").trim();
+}
+
+const rolePasswordKeys = {
+  admin: "DEMO_ADMIN_PASSWORD",
+  "staff-editor": "DEMO_STAFF_PASSWORD",
+  "manager-client": "DEMO_CLIENT_PASSWORD"
+};
+
+export function validateDemoPasswords(source = process.env) {
+  const passwords = {};
+  for (const [role, key] of Object.entries(rolePasswordKeys)) {
+    const password = String(source[key] || "").trim();
+    if (!password) {
+      throw new Error(`${key} is required. Set a strong password before running the demo seed command.`);
+    }
+    if (password.length < 12) {
+      throw new Error(`${key} must be at least 12 characters.`);
+    }
+    if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
+      throw new Error(`${key} must include uppercase, lowercase, number, and symbol characters.`);
+    }
+    passwords[role] = password;
+  }
+  if (new Set(Object.values(passwords)).size !== Object.values(passwords).length) {
+    throw new Error("Demo role passwords must be distinct.");
+  }
+  return passwords;
+}
+
+export function passwordForRole(role, passwords) {
+  return passwords[normalizeRole(role)];
 }
 
 function supabaseUrl() {
@@ -92,34 +124,33 @@ async function createOrUpdateAuthUser(person, password) {
   }
 }
 
-async function ensureStorageBucket() {
+export async function ensureStorageBucket(request = requestSupabase) {
   const bucket = envValue("SUPABASE_STORAGE_BUCKET") || "contentflow-media";
   try {
-    await requestSupabase("/storage/v1/bucket", {
+    await request("/storage/v1/bucket", {
       method: "POST",
       body: JSON.stringify({
         id: bucket,
         name: bucket,
-        public: true,
+        public: false,
         file_size_limit: 524288000
       })
     });
     return { bucket, created: true };
   } catch (error) {
     if (![400, 409].includes(error.status)) throw error;
-    await requestSupabase(`/storage/v1/bucket/${encodeURIComponent(bucket)}`, {
+    await request(`/storage/v1/bucket/${encodeURIComponent(bucket)}`, {
       method: "PUT",
       body: JSON.stringify({
-        public: true,
-        file_size_limit: 524288000
+        public: false
       })
-    }).catch(() => null);
+    });
     return { bucket, created: false };
   }
 }
 
 async function main() {
-  const password = envValue("DEMO_USER_PASSWORD") || "ContentFlowDemo2026!";
+  const passwords = validateDemoPasswords();
   const organization = readOrganization();
 
   await initializeSupabaseSchema();
@@ -133,7 +164,7 @@ async function main() {
 
   const seeded = [];
   for (const person of organization.staff) {
-    const authUser = await createOrUpdateAuthUser(person, password);
+    const authUser = await createOrUpdateAuthUser(person, passwordForRole(person.role, passwords));
     const user = await upsertSupabaseUser({
       ...person,
       role: normalizeRole(person.role),
@@ -148,11 +179,13 @@ async function main() {
     ok: true,
     users: seeded,
     bucket,
-    passwordSource: envValue("DEMO_USER_PASSWORD") ? "DEMO_USER_PASSWORD" : "default"
+    passwordSources: Object.values(rolePasswordKeys)
   }, null, 2));
 }
 
-main().catch((error) => {
-  console.error(error.message);
-  process.exitCode = 1;
-});
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main().catch((error) => {
+    console.error(error.message);
+    process.exitCode = 1;
+  });
+}

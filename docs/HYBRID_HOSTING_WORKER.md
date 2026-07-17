@@ -59,13 +59,17 @@ editor@digitalbee.ai    -> staff-editor
 reviewer@digitalbee.ai  -> manager-client
 ```
 
-Set a custom password before seeding:
+Set three distinct strong passwords before seeding:
 
 ```txt
-DEMO_USER_PASSWORD=
+DEMO_ADMIN_PASSWORD=
+DEMO_STAFF_PASSWORD=
+DEMO_CLIENT_PASSWORD=
 ```
 
-If this is omitted, the script uses the local demo default from `.env.example`.
+Each password must be at least 12 characters and include uppercase, lowercase,
+number, and symbol characters. The seed command fails before making network or
+filesystem changes when any password is missing, weak, or reused.
 
 ## Vercel Environment Variables
 

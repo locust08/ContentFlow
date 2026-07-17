@@ -4,10 +4,11 @@ AI-assisted content production system for Digital Bee workflows and FYP demonstr
 
 ## Main Modules
 
-- **Admin dashboard:** clients, campaigns, projects, assignment, media library, analytics, and Supabase sync.
+- **Admin dashboard:** clients, campaigns, projects, assignment, media library, analytics, and D1-backed management.
 - **Staff/editor workspace:** assigned AI Generator and Auto Clipper projects.
 - **Manager/client dashboard:** final media review, approval, and campaign analytics.
-- **Hybrid production engine:** Vercel queues heavy jobs, while the local workstation runs Remotion, ffmpeg, yt-dlp, LibTV, OpenAI, and ElevenLabs.
+- **Hybrid production engine:** Cloudflare queues heavy jobs, while the local workstation runs Remotion, ffmpeg, yt-dlp, external AI services, and voice generation.
+- **Cloudflare data layer:** D1 stores structured operational records and private R2 stores uploaded and generated media.
 
 ## Local Setup
 
@@ -22,6 +23,8 @@ SUPABASE_URL=...
 SUPABASE_ANON_KEY=...
 SUPABASE_SERVICE_ROLE_KEY=...
 SUPABASE_DATABASE_URL=...
+CLOUDFLARE_WORKER_URL=...
+CONTENTFLOW_PRODUCTION_TOKEN=...
 ```
 
 PowerShell may block `npm.ps1`; use `npm.cmd` if needed.
@@ -34,15 +37,18 @@ npm.cmd run app
 
 Open `http://localhost:4173`.
 
-## Supabase Demo Setup
+## Authentication Setup
 
-Seed demo Auth users, role records, client/campaign records, and the public media bucket:
+Seed the existing Supabase Auth demo identities before importing role and project records into D1:
 
 ```bash
+DEMO_ADMIN_PASSWORD=<set-in-your-.env>
+DEMO_STAFF_PASSWORD=<set-in-your-.env>
+DEMO_CLIENT_PASSWORD=<set-in-your-.env>
 npm.cmd run seed:demo
 ```
 
-Default demo accounts:
+Demo account emails and roles:
 
 ```txt
 admin@digitalbee.ai     admin
@@ -50,22 +56,22 @@ editor@digitalbee.ai    staff-editor
 reviewer@digitalbee.ai  manager-client
 ```
 
-Set `DEMO_USER_PASSWORD` in `.env` before seeding if you want a custom password.
+All three demo password variables are mandatory and have no defaults. Give Admin, Staff, and Client distinct passwords with at least 12 characters, including uppercase, lowercase, number, and symbol characters. The seed command also makes the legacy Supabase media bucket private. Do not commit passwords.
 
-## Hybrid Hosted Deployment
+## Cloudflare Hosted Deployment
 
-The hosted Vercel app is the control dashboard. Heavy production runs locally through the worker.
+The Cloudflare Worker hosts the web app and authenticated API. D1 stores application data, R2 stores private media, and heavy production remains on the local workstation.
 
-Vercel environment variables:
+Local deployment and worker variables:
 
 ```txt
+CLOUDFLARE_ACCOUNT_ID=
+CLOUDFLARE_API_TOKEN=
+CLOUDFLARE_WORKER_URL=
+CONTENTFLOW_PRODUCTION_TOKEN=
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
-SUPABASE_DATABASE_URL=
-SUPABASE_STORAGE_BUCKET=contentflow-media
 REQUIRE_AUTH=true
-HOSTED_DEMO=true
 ```
 
 Start the local production worker:
@@ -74,12 +80,12 @@ Start the local production worker:
 npm.cmd run worker
 ```
 
-When a hosted user requests generation/rendering, the dashboard creates a Supabase production job. The local worker picks up queued jobs, processes them, uploads outputs to Supabase Storage, and updates job status.
+When a hosted user requests generation or rendering, the dashboard creates a D1 production job. The local worker claims the job through a protected API, processes it, uploads outputs to private R2, and updates the D1 job status.
 
 More details:
 
-- [Hybrid hosting guide](docs/HYBRID_HOSTING_WORKER.md)
-- [Vercel deployment checklist](docs/VERCEL_DEPLOYMENT_CHECKLIST.md)
+- [Cloudflare deployment and migration guide](docs/CLOUDFLARE_DEPLOYMENT.md)
+- [Legacy Supabase/Vercel rollback guide](docs/HYBRID_HOSTING_WORKER.md)
 
 ## CLI Usage
 
@@ -131,13 +137,6 @@ projects/<project>/
     libtv-video-assets.json
     edit-plan.json
 ```
-
-## Next Phases
-
-- Add OpenAI image generation for scene stills.
-- Add libtv video generation once the API docs/request format are available.
-- Add a Remotion composition that reads `edit-plan.json`.
-- Add a small dashboard for upload, review, approve, and render.
 
 ## Rendering
 
